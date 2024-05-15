@@ -21,7 +21,7 @@ rules = {
 }
 
 # Define the turtle drawing function
-def draw_lsystem(instructions, order, step_size=10):
+def draw_lsystem(instructions, step_size):
     stack = []
     t = turtle.Turtle()
     t.speed(0) # turtle speed to max
@@ -50,9 +50,9 @@ def draw_lsystem(instructions, order, step_size=10):
     turtle.Screen().mainloop()  # Keep the turtle graphics window open
 
 # Generate the L-system
-def generate_lsystem(axiom, rules, order):
+def generate_lsystem(axiom, rules, iterations):
     instructions = axiom
-    for _ in range(order):
+    for _ in range(iterations):
         next_instructions = ""
         for char in instructions:
             if char in rules:
@@ -68,4 +68,4 @@ iterations = int(input("Enter the number of iterations (1-10): "))
 
 # Generate the L-system and draw the city
 instructions = generate_lsystem(axiom, rules, iterations)
-draw_lsystem(instructions, iterations, step_size=30)
+draw_lsystem(instructions, step_size=30)
