@@ -107,9 +107,10 @@ while running:
             running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             print("clicked")
-            mouse_x, mouse_y = event.pos # get the position of the mouse click
-            for i, (x, y) in enumerate(nodes): # Loop through all nodes to find the one closest to the mouse click.
-                distance = ((x - mouse_x + scroll_x) ** 2 + (y - mouse_y + scroll_y) ** 2) ** 0.5
+            mouse_x = event.pos[0] + scroll_x
+            mouse_y = event.pos[1] + scroll_y
+            for i, (x, y) in enumerate(nodes):  # Loop through all nodes to find the one closest to the mouse click.
+                distance = ((x - mouse_x) ** 2 + (y - mouse_y) ** 2) ** 0.5
                 if distance < 10:  # radius kung gaano dapat kalapit ang click para ma-detect kung saang node siya
                     if start_node is None:
                         start_node = i
