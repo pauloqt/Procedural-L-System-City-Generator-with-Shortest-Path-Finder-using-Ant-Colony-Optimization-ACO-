@@ -119,11 +119,12 @@ while running:
                     elif end_node is None and i != start_node:  # Check if the clicked node is not the same as the start node
                         end_node = i
                         pygame.draw.circle(surface, RED, (x, y), 5)
-                        # Implement your shortest path finding algorithm here
                         print(f"Shortest path from node {start_node} to node {end_node}")
                     else:
                         print("Start and end nodes cannot be the same. Please click another node for the end node.")
                     break
+
+
         elif event.type == pygame.MOUSEWHEEL:
             scroll_x += event.x * 50
             scroll_y += event.y * 50
