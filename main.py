@@ -1,6 +1,7 @@
 import pygame
 import random
 import math
+import heapq
 
 # Define colors
 BLACK = (0, 0, 0)
@@ -32,6 +33,7 @@ rules = {
 def draw_lsystem(sequence, step_size, surface):
     stack = [] # storage of the current direction and angle of the turtle para ma-remember kapag babalikan.
     nodes = [] # storage of the nodes (each move forward represents 1 node)
+    edges = []
     x, y = surface.get_width() // 2, surface.get_height() // 2
     angle = 90  # Start facing up
 
@@ -43,6 +45,7 @@ def draw_lsystem(sequence, step_size, surface):
             pygame.draw.line(surface, WHITE, (x, y), (new_x, new_y), 2)
             pygame.draw.circle(surface, BLUE, (x, y), 2)
             nodes.append((new_x, new_y)) # add the node to the node list
+            edges.append(((x, y), (new_x, new_y)))
             x, y = new_x, new_y
         elif char == "+": # Rotate turtle 90 degrees right
             angle += 90
@@ -53,7 +56,7 @@ def draw_lsystem(sequence, step_size, surface):
         elif char == "]": # Pop position and angle from the stack, para babalik siya sa first position ng branch
             x, y, angle = stack.pop()
 
-    return nodes
+    return nodes, edges
 
 # Generate the string of L-system starting with the axiom
 def generate_lsystem(axiom, rules, iterations):
@@ -69,10 +72,56 @@ def generate_lsystem(axiom, rules, iterations):
         print(sequence)
     return sequence
 
+def heuristic(a, b): #returns the euclidean distance between 2 nodes
+    return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
+
+def astar(graph, start, end, nodes):
+    # Early exit condition: if the graph is empty or the start node is the same as the end node, return either the start node or None.
+    if not graph or start == end:
+        return [start] if start == end else None
+
+    open_set = [] #list of nodes
+    heapq.heappush(open_set, (0, start))
+    came_from = {}
+    g_score = {node: float('inf') for node in range(len(nodes))}
+    g_score[start] = 0
+    f_score = {node: float('inf') for node in range(len(nodes))}
+    f_score[start] = heuristic(nodes[start], nodes[end])
+
+    while open_set:
+        current = heapq.heappop(open_set)[1]
+
+        if current == end:
+            path = [current]
+            while current in came_from:
+                current = came_from[current]
+                path.append(current)
+            path.reverse()
+            return path
+
+        # Closed set optimization: Maintain a set of visited nodes
+        visited = set()
+
+        for neighbor, cost in graph[current]:
+            if neighbor in visited:
+                continue  # Skip visited nodes
+
+            tentative_g_score = g_score[current] + cost
+            if tentative_g_score < g_score[neighbor]:
+                came_from[neighbor] = current  # Store the parent node
+                g_score[neighbor] = tentative_g_score
+                f_score[neighbor] = g_score[neighbor] + heuristic(nodes[neighbor], nodes[end])
+                if neighbor not in [i[1] for i in open_set]:
+                    heapq.heappush(open_set, (f_score[neighbor], neighbor))
+
+        visited.add(current)  # Mark the current node as visited
+
+    return None
+
 # Prompt the user for the number of iterations
 iterations = int(input("Enter the number of iterations (1-10): "))
 
-# Initialize Pygame
+#----------------------------------------------------Initialize Pygame-----------------------------------------------------------
 pygame.init()
 screen_width, screen_height = 1000, 800
 screen = pygame.display.set_mode((screen_width, screen_height))
@@ -84,60 +133,95 @@ surface_width, surface_height = 1500, 1500
 surface = pygame.Surface((surface_width, surface_height))
 surface.fill(GREEN)
 
-# Generate the L-system and draw the city on the larger surface
-sequence = generate_lsystem(axiom, rules, iterations)
-nodes = draw_lsystem(sequence, step_size=15, surface=surface)
-
-# Variables for start and end nodes
-start_node = None
-end_node = None
-
 scroll_x, scroll_y = 0, 0
 # Set initial scroll position to center the screen on the surface
 scroll_x = (surface_width - screen_width) // 2
 scroll_y = (surface_height - screen_height) // 2
 
-# Game loop
-running = True
-while running:
-    clock.tick(60)  # Limit the frame rate
+#----------------------------------------------------Generate City-----------------------------------------------------------
 
-    for event in pygame.event.get(): # mag-loop sa event/action ni user (e.g. clicks, close window)
-        if event.type == pygame.QUIT:
-            running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            print("clicked")
-            mouse_x = event.pos[0] + scroll_x
-            mouse_y = event.pos[1] + scroll_y
-            for i, (x, y) in enumerate(nodes):  # Loop through all nodes to find the one closest to the mouse click.
-                distance = ((x - mouse_x) ** 2 + (y - mouse_y) ** 2) ** 0.5
-                if distance < 10:  # radius kung gaano dapat kalapit ang click para ma-detect kung saang node siya
-                    if start_node is None:
-                        start_node = i
-                        pygame.draw.circle(surface, RED, (x, y), 5)
-                        print("Click the end node")
-                    elif end_node is None and i != start_node:  # Check if the clicked node is not the same as the start node
-                        end_node = i
-                        pygame.draw.circle(surface, RED, (x, y), 5)
-                        print(f"Shortest path from node {start_node} to node {end_node}")
-                    else:
-                        print("Start and end nodes cannot be the same. Please click another node for the end node.")
-                    break
+# Generate the L-system and draw the city on the larger surface
+sequence = generate_lsystem(axiom, rules, iterations)
+nodes, edges = draw_lsystem(sequence, step_size=15, surface=surface)
+
+#----------------------------------------------------Initialize Shortest Path-----------------------------------------------------------
+# Create adjacency list - a graph where naka-list lahat ng nodes and its neighboring/adjacent nodes and its euclidean distance to that node.
+n_nodes = len(nodes)
+graph = {i: [] for i in range(n_nodes)} #initialize an empty adjacency list for each node
+for (x1, y1), (x2, y2) in edges: #mag-loop sa every edge/line segment
+    if (x1, y1) in nodes and (x2, y2) in nodes: #check if yung start and end nodes ng edge ay nasa nodes list
+        i = nodes.index((x1, y1))  # find index of starting node
+        j = nodes.index((x2, y2)) # find index of end node
+        distance = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2) #Calculate the euclidean distance between two nodes using their coordinates
+        graph[i].append((j, distance)) # Add and adjacent node and its distance sa adjacency list
+        graph[j].append((i, distance))
+
+#---------------------------------------------------- Game Loop -----------------------------------------------------------
+
+def main():
+    global scroll_x, scroll_y
+    # Variables for start and end nodes
+    start_node = None
+    end_node = None
+
+    loop_start_node = None
+    running = True
+
+    while running:
+        clock.tick(60)  # Limit the frame rate
+
+        for event in pygame.event.get(): # mag-loop sa event/action ni user (e.g. clicks, close window)
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                print("clicked")
+                mouse_x = event.pos[0] + scroll_x
+                mouse_y = event.pos[1] + scroll_y
+                for i, (x, y) in enumerate(nodes):  # Loop through all nodes to find the one closest to the mouse click.
+                    distance = ((x - mouse_x) ** 2 + (y - mouse_y) ** 2) ** 0.5
+                    if distance < 10:  # radius kung gaano dapat kalapit ang click para ma-detect kung saang node siya
+                        if start_node is None:
+                            start_node = i
+                            pygame.draw.circle(surface, RED, (x, y), 5)
+                            print("Click the end node")
+                        elif end_node is None and i != start_node:  # Check if the clicked node is not the same as the start node
+                            end_node = i
+                            pygame.draw.circle(surface, RED, (x, y), 5)
+                            print(f"Shortest path from node {start_node} to node {end_node}")
+
+                            # Run A* to find the shortest path
+                            shortest_path = astar(graph, start_node, end_node, nodes)
+                            if shortest_path:
+                                print("Shortest path found:", shortest_path)
+                                for idx in range(len(shortest_path) - 1):
+                                    node_a = nodes[shortest_path[idx]]
+                                    node_b = nodes[shortest_path[idx + 1]]
+                                    pygame.draw.line(surface, RED, node_a, node_b, 2)
+
+                            # Reset start_node and end_node to None for the next selection
+                            start_node = None
+                            end_node = None
+
+                        else:
+                            print("Start and end nodes cannot be the same. Please click another node for the end node.")
+                        break
 
 
-        elif event.type == pygame.MOUSEWHEEL:
-            scroll_x += event.x * 50
-            scroll_y += event.y * 50
-            # Clamp scroll_x and scroll_y within the bounds of the surface
-            scroll_x = max(min(scroll_x, surface_width - screen_width), 0)
-            scroll_y = max(min(scroll_y, surface_height - screen_height), 0)
+            elif event.type == pygame.MOUSEWHEEL:
+                scroll_x += event.x * 50
+                scroll_y += event.y * 50
+                # Clamp scroll_x and scroll_y within the bounds of the surface
+                scroll_x = max(min(scroll_x, surface_width - screen_width), 0)
+                scroll_y = max(min(scroll_y, surface_height - screen_height), 0)
 
-    # Draw the portion of the surface onto the screen
-    screen_rect = pygame.Rect(scroll_x, scroll_y, screen_width, screen_height)
-    surface_sub = surface.subsurface(screen_rect)
-    scaled_surface = pygame.transform.scale(surface_sub, (screen_width, screen_height))
-    screen.blit(scaled_surface, (0, 0))
+        # Draw the portion of the surface onto the screen
+        screen_rect = pygame.Rect(scroll_x, scroll_y, screen_width, screen_height)
+        surface_sub = surface.subsurface(screen_rect)
+        scaled_surface = pygame.transform.scale(surface_sub, (screen_width, screen_height))
+        screen.blit(scaled_surface, (0, 0))
 
-    pygame.display.flip()
+        pygame.display.flip()
 
-pygame.quit()
+    pygame.quit()
+
+main()
