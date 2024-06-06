@@ -8,62 +8,80 @@ main_rules = {
     'F': "FFF[+FF]FFF|",
 }
 
-branching_axiom = "A"
+branching_axiom = "BB"
 branching_rules = {
-    "A": [
-        "B[+AA]B[-AB]|BA",
-        "B[+AB]BA[-A]+B+",
-        "B-[[AB]+A]+B[+BA]-A",
-        "BB[+AB][+A]",  # New rule for intersections
-        "BB+AAB+"
-    ],
     "B": [
-        "BB",
-        "B[+B]B[-B]B",
-        "B[+BB][-BB]B",  # New rule for curved paths
-        "-BA-B"
+        "BB", "+BB[BB]", "-BB[BB]"
     ],
 }
 
-
+# rules para sa mag co-connect ng 2nd generation
+connecting_axiom = "C"
+connecting_rules = {
+    "C": [
+        "CCC", "+CC[CC]", "-CC[CC]", "CC[+CC]C",
+        "CC[+A]C[-A]CC",
+        "C[+A]C[-A]+C",
+        # "C-[[A]+A]+C[+A]-CC",
+        # "CC[+A][+A]CC[-A][-A]C",  # New rule for intersections
+    ],
+}
 
 depth_factor = 0.5
-string_placeholder = []
-marked_positions = []
-marked_branching_position = []
+marked_positions = [] # marker para sa branching
+marked_branching_positions = [] # marker para sa connecting ng road
+#white = (255, 255, 255)
+green = (61, 114, 40)
+black = (0, 0, 0)
+
 
 # Function to generate L-system string
-def generate_l_system(axiom, rules, iterations):
+def generate_l_system(main_axiom, main_rules, iterations):
+    current_string = main_axiom
+    for i in range(iterations):
+        next_string = ""
+        for char in current_string:
+            if char in main_rules:
+                next_string += main_rules[char]
+            else:
+                next_string += char
+        current_string = next_string
+        print(current_string)
+    return current_string
+
+# Function to generate branching L-system string
+def generate_branching_lsystem(axiom, rules, iterations):
     current_string = axiom
     for i in range(iterations):
         next_string = ""
         for char in current_string:
             if char in rules:
-                next_string += rules[char]
+                if isinstance(rules[char], list):
+                    next_string += random.choice(rules[char])
+                else:
+                    next_string += rules[char]
             else:
                 next_string += char
         current_string = next_string
-        string_placeholder.append(current_string)
-        print(f"Iteration {i + 1}: {current_string}")
+        print(current_string)
     return current_string
 
-# Function to generate branching L-system string
-def generate_branching_lsystem(axiom, branching_rules, iterations):
-    current_string = axiom
+def generate_connecting_lsystem(connecting_axiom, connecting_rules, iterations):
+    current_string = connecting_axiom
     for i in range(iterations):
         next_string = ""
         for char in current_string:
-            if char in branching_rules:
-                if isinstance(branching_rules[char], list):
-                    next_string += random.choice(branching_rules[char])
+            if char in connecting_rules:
+                if isinstance(connecting_rules[char], list):
+                    next_string += random.choice(connecting_rules[char])
                 else:
-                    next_string += branching_rules[char]
+                    next_string += connecting_rules[char]
             else:
                 next_string += char
         current_string = next_string
-        string_placeholder.append(current_string)
-        print(f"Iteration {i + 1}: {current_string}")
+        print(current_string)
     return current_string
+
 
 def draw_l_system(screen, instructions, angle, length, depth_factor, mark=False):
     stack = []
@@ -96,7 +114,7 @@ def draw_l_system(screen, instructions, angle, length, depth_factor, mark=False)
             stack.append((x, y, heading))
         elif char == ']':
             x, y, heading = stack.pop()
-        elif char == '|':
+        elif char == '|': # maglalagay ng line pero naka-depende ang size sa na-compute
             depth_length = length * len(stack) * depth_factor
             new_x = x + depth_length * math.cos(math.radians(heading))
             new_y = y - depth_length * math.sin(math.radians(heading))
@@ -106,9 +124,9 @@ def draw_l_system(screen, instructions, angle, length, depth_factor, mark=False)
                 pygame.draw.line(screen, (255, 255, 255), (x, y), (new_x, new_y), 2)
             x, y = new_x, new_y
 
-        if i + 2 < len(instructions) and instructions[i:i + 9] == '[+FF]FFF|':
+        if i + 3 < len(instructions) and instructions[i:i + 9] == '[+FF]FFF|':
             marked_positions.append((x, y, heading))
-            i += 2
+            i += 3
 
         i += 1
 
@@ -121,18 +139,21 @@ def draw_branching_l_system(screen, instructions, angle, length, depth_factor, x
     stack = []
     i = 0
     global marked_branching_position
+    markers = {}
 
     while i < len(instructions):
         char = instructions[i]
-        if char == 'B':
+        if char == 'B' or char == 'C':
             new_x = x + length * math.cos(math.radians(heading))
             new_y = y - length * math.sin(math.radians(heading))
             pygame.draw.line(screen, (255, 255, 255), (x, y), (new_x, new_y), 1)
             x, y = new_x, new_y
-        elif char == 'A':
-            heading -= angle
+        elif char == 'A': # mag fo-forward pero hindi maglalagay ng line
+            new_x = x + length * math.cos(math.radians(heading))
+            new_y = y - length * math.sin(math.radians(heading))
+            x, y = new_x, new_y
         elif char == '+':
-            heading -= angle + 180
+            heading -= angle
         elif char == '-':
             heading += angle
         elif char == '[':
@@ -147,25 +168,20 @@ def draw_branching_l_system(screen, instructions, angle, length, depth_factor, x
             pygame.draw.line(screen, (255, 255, 255), (x, y), (new_x, new_y), 1)
             x, y = new_x, new_y
 
-        if i + 2 < len(instructions) and instructions[i:i + 3] == 'BBB':
-            marked_branching_position.append((x, y, heading))
+        if i + 2 < len(instructions) and instructions[i:i + 9] == 'BB+BB[BB]':
+            marked_branching_positions.append((x, y, heading))
             i += 2
-
         i += 1
 
     if len(marked_positions) == 0:
         pygame.draw.line(screen, (255, 255, 255), (x, y), (x, y), 1)  # Reset line width to default
 
-    return marked_branching_position
-
-#white = (255, 255, 255)
-green = (61, 114, 40)
-black = (0, 0, 0)
+    return marked_branching_positions
 
 # Main function
 def main():
     global marked_positions
-    global marked_branching_position
+    global marked_branching_positions
 
     pygame.init()
     screen = pygame.display.set_mode((1600, 900))
@@ -174,10 +190,11 @@ def main():
 
     num_iterations = int(input("Enter the number of iterations (1-10): "))
 
+    # if no. iterations ay equal sa input babawasan niya yung iteration
     if num_iterations == 3:
         main_instructions = generate_l_system(main_axiom, main_rules, num_iterations)
     elif num_iterations == 4 or num_iterations == 5:
-        main_instructions = generate_l_system(main_axiom, main_rules, int(num_iterations - 0.3))
+        main_instructions = generate_l_system(main_axiom, main_rules, int(num_iterations - 0.1))
     elif num_iterations == 6 or num_iterations == 7:
         main_instructions = generate_l_system(main_axiom, main_rules, int(num_iterations - 1.3))
     elif num_iterations == 8 or num_iterations == 9:
@@ -190,79 +207,114 @@ def main():
     print(main_instructions)
 
     # Draw main L-system
+    step_size = 10
     random_angle_main = random.uniform(45, 90)
-    random_length_main = random.uniform(10, 15)
-    marked_positions = draw_l_system(screen, main_instructions, random_angle_main, random_length_main, depth_factor, mark=True)
+    marked_positions = draw_l_system(screen, main_instructions, random_angle_main, step_size, depth_factor, mark=True)
 
+    # Generate and draw branching using the main road marker
     if marked_positions:
         for marked_position in marked_positions:
             x, y, heading = marked_position
-            # x += -30
-            # y -= 60
-            random_angle_branching = random.uniform(90, 90)
-            rand_number = random.uniform(3.5, 5.0)
-            concatenated_instructions = ""
+            angle_branching = 90
+            rand_number = random.uniform(3.5, 5.5)
 
+            # if no. iterations ay equal sa input babawasan niya yung iteration
             if num_iterations == 3:
-                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 0.2))
-                random_length_branching = random.uniform(11, 25)  # Adjust the length range if needed
-                draw_branching_l_system(screen, branching_instructions, random_angle_branching,
-                                        random_length_branching, depth_factor, x, y, heading)
+                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 0.1))
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 4:
-                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 1.0))
-                random_length_branching = random.uniform(11, 25)  # Adjust the length range if needed
-                draw_branching_l_system(screen, branching_instructions, random_angle_branching,
-                                        random_length_branching, depth_factor, x, y, heading)
+                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 1.5))
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 5:
-                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 2.0))
-                random_length_branching = random.uniform(11, 25)
-                draw_branching_l_system(screen, branching_instructions, random_angle_branching,
-                                        random_length_branching, depth_factor, x, y, heading)
+                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 2.5))
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 6:
-                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 3.0))
-                random_length_branching = random.uniform(11, 25)
-                draw_branching_l_system(screen, branching_instructions, random_angle_branching,
-                                        random_length_branching, depth_factor, x, y, heading)
+                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 3.5))
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 7 or num_iterations == 8 or num_iterations == 9:
                 branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - rand_number))
-                random_length_branching = random.uniform(11, 25)
-                draw_branching_l_system(screen, branching_instructions, random_angle_branching,
-                                        random_length_branching, depth_factor, x, y, heading)
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 10:
                 branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - rand_number))
-                random_length_branching = random.uniform(11, 25)
-                draw_branching_l_system(screen, branching_instructions, random_angle_branching,
-                                        random_length_branching, depth_factor, x, y, heading)
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
             else:
                 for i in range(num_iterations):
                     branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, i + 1)
-                    concatenated_instructions += branching_instructions
+                    draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                                     step_size * 2, depth_factor, x, y, heading)
 
-                    random_angle_branching = random.uniform(90, 90)
-                    random_length_branching = random.uniform(11, 25)  # Adjust the length range if needed
-                    draw_branching_l_system(screen, concatenated_instructions, random_angle_branching,
-                                                     random_length_branching, depth_factor, x, y, heading)
+    # Generate and draw another branching using the previous branching marker
+    if marked_branching_positions:
+        for branching in marked_branching_positions:
+            x, y, heading = branching
 
+            angle_branching = 90
+            rand_number = random.uniform(3.5, 5.5)
+
+            if num_iterations == 3:
+                branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules,
+                                                                    int(num_iterations - 0.1))
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
+            elif num_iterations == 4:
+                branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules,
+                                                                    int(num_iterations - 1.5))
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
+            elif num_iterations == 5:
+                branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules,
+                                                                    int(num_iterations - 2.5))
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
+            elif num_iterations == 6:
+                branching_instructions =generate_connecting_lsystem(connecting_axiom, connecting_rules,
+                                                                    int(num_iterations - 4.0))
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
+            elif num_iterations == 7 or num_iterations == 8 or num_iterations == 9:
+                branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules,
+                                                                    int(num_iterations - rand_number))
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
+            elif num_iterations == 10:
+                branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules,
+                                                                    int(num_iterations - rand_number))
+                draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                        step_size * 2, depth_factor, x, y, heading)
+            else:
+                for i in range(num_iterations):
+                    branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules, i + 1)
+                    draw_branching_l_system(screen, branching_instructions, angle_branching,
+                                            step_size * 2, depth_factor, x, y, heading)
+
+    # Function for the random buildings
     # def draw_random_buildings(screen, positions, num_rectangles):
     #     for pos in positions:
     #         for _ in range(num_rectangles):
     #             # Random size
-    #             width = random.uniform(10, 15)
-    #             height = random.uniform(10, 15)
+    #             width = random.uniform(5, 8)
+    #             height = random.uniform(5, 8)
     #
     #             # Draw the rectangle at the specified position
     #             x, y = pos
-    #             x += 10
+    #             x += 50
+    #             y += 50
     #             pygame.draw.rect(screen, black, (x, y, width, height))
     #
     # # Draw buildings at marked_branching_position
-    # if marked_branching_position:
-    #     positions = [(pos[0], pos[1]) for pos in marked_branching_position]
+    # if marked_positions:
+    #     positions = [(pos[0], pos[1]) for pos in marked_positions]
     #     draw_random_buildings(screen, positions, num_iterations - 1)
 
     # Print marked positions
-    print("Marked Positions:", marked_positions)
-    # print("Marked Branching Positions:", marked_branching_position)
+    # print("Marked Positions:", marked_positions)
+    # print("Marked Branching Positions:", marked_branching_positions)
 
     # Main event loop
     running = True
