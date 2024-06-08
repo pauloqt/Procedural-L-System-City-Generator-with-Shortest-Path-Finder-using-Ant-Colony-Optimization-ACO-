@@ -16,13 +16,10 @@ branching_rules = {
 }
 
 # rules para sa mag co-connect ng 2nd generation
-connecting_axiom = "CC-C"
+connecting_axiom = "C"
 connecting_rules = {
     "C": [
-        "CC", "+C[C]", "-C[C]",
-    ],
-    "B": [
-            "BB", "+BB[BB]", "-BB[BB]",
+        "CCC", "C[+CC]", "C[-CC]"
     ],
 }
 
@@ -86,7 +83,6 @@ def generate_connecting_lsystem(connecting_axiom, connecting_rules, iterations):
 
 def draw_l_system(screen, instructions, start_pos, angle, length, depth_factor, mark=False):
     stack = []
-    global marked_positions
     x, y = start_pos
     heading = 0
     i = 0
@@ -140,19 +136,23 @@ def draw_l_system(screen, instructions, start_pos, angle, length, depth_factor, 
 def draw_branching_l_system(screen, instructions, angle, length, depth_factor, x, y, heading):
     # Note: hindi pwede palitan ang x & y kasi yung x,y na gamit neto is yung x,y ng marker sa main lsystem
     stack = []
-    i = 0
-    global marked_branching_position
 
-    while i < len(instructions):
+    i = len(instructions) - 1  # Start from the end of the instructions
+    while i >= 0:
         char = instructions[i]
-        if char == 'B' or char == 'C':
+
+        if char == ']':
+            # Move to the beginning of the segment
+            while i >= 0 and instructions[i] != '[':
+                i -= 1
+
+            if i >= 0 and instructions[i:i + 4] == '[BB]':
+                marked_branching_positions.append((x, y, heading)) # mark the pos if the end of instruction is equal to [BB]
+                i -= 1
+        elif char == 'B' or char == 'C':     # Draw the branching road segment
             new_x = x + length * math.cos(math.radians(heading))
             new_y = y - length * math.sin(math.radians(heading))
             pygame.draw.line(screen, ROAD_COLOR, (x, y), (new_x, new_y), 1)
-            x, y = new_x, new_y
-        elif char == 'A': # mag fo-forward pero hindi maglalagay ng line
-            new_x = x + length * math.cos(math.radians(heading))
-            new_y = y - length * math.sin(math.radians(heading))
             x, y = new_x, new_y
         elif char == '+':
             heading -= angle
@@ -160,31 +160,22 @@ def draw_branching_l_system(screen, instructions, angle, length, depth_factor, x
             heading += angle
         elif char == '[':
             stack.append((x, y, heading))
-        elif char == ']':
-            x, y, heading = stack.pop()
         elif char == '|':
-            heading += angle
             depth_length = length * len(stack) * depth_factor
             new_x = x + depth_length * math.cos(math.radians(heading))
             new_y = y - depth_length * math.sin(math.radians(heading))
             pygame.draw.line(screen, ROAD_COLOR, (x, y), (new_x, new_y), 1)
             x, y = new_x, new_y
 
-        if i + 2 < len(instructions) and instructions[i:i + 9] == 'BB+BB[BB]':
-            marked_branching_positions.append((x, y, heading))
-            i += 2
-        i += 1
+        i -= 1
 
     if len(marked_positions) == 0:
-        pygame.draw.line(screen, ROAD_COLOR, (x, y), (x, y), 1)  # Reset line width to default
+        pygame.draw.line(screen, (255, 255, 255), (x, y), (x, y), 1)
 
     return marked_branching_positions
 
 # Main function
 def main():
-    global marked_positions
-    global marked_branching_positions
-
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("L-System")
@@ -215,6 +206,7 @@ def main():
     random_angle_main = random.uniform(45, 90)
     marked_positions = draw_l_system(screen, main_instructions, start_pos, random_angle_main, step_size, depth_factor, mark=True)
 
+    # Step size na gamit sa branching and connecting ay 20
     # Generate and draw branching using the main road marker
     if marked_positions:
         for marked_position in marked_positions:
@@ -263,12 +255,12 @@ def main():
 
             if num_iterations == 3:
                 branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules,
-                                                                    int(num_iterations - 0.1))
+                                                                    int(num_iterations - 0.1))  # pwede i-adjust yung number
                 draw_branching_l_system(screen, branching_instructions, angle_branching,
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 4:
                 branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules,
-                                                                    int(num_iterations - 1.5))
+                                                                    int(num_iterations - 1.0))
                 draw_branching_l_system(screen, branching_instructions, angle_branching,
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 5:
