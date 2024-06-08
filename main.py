@@ -8,7 +8,7 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
-GREEN = (1, 50, 32)
+GREEN = (61, 114, 40)
 
 # Define the axiom and production rules
 axiom = "X"
@@ -130,7 +130,7 @@ pygame.display.set_caption("L-System City Generator")
 clock = pygame.time.Clock()
 
 # Create a larger surface for drawing
-surface_width, surface_height = 1500, 1500
+surface_width, surface_height = 3000, 3000
 surface = pygame.Surface((surface_width, surface_height))
 surface.fill(GREEN)
 
