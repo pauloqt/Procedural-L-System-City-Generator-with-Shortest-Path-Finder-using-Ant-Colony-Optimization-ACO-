@@ -11,28 +11,29 @@ main_rules = {
 branching_axiom = "BB"
 branching_rules = {
     "B": [
-        "BB", "+BB[BB]", "-BB[BB]"
+        "BB", "+BB[BB]", "-BB[BB]",
     ],
 }
 
 # rules para sa mag co-connect ng 2nd generation
-connecting_axiom = "C"
+connecting_axiom = "CC-C"
 connecting_rules = {
     "C": [
-        "CCC", "+CC[CC]", "-CC[CC]", "CC[+CC]C",
-        "CC[+A]C[-A]CC",
-        "C[+A]C[-A]+C",
-        # "C-[[A]+A]+C[+A]-CC",
-        # "CC[+A][+A]CC[-A][-A]C",  # New rule for intersections
+        "CC", "+C[C]", "-C[C]",
+    ],
+    "B": [
+            "BB", "+BB[BB]", "-BB[BB]",
     ],
 }
 
 depth_factor = 0.5
 marked_positions = [] # marker para sa branching
 marked_branching_positions = [] # marker para sa connecting ng road
-#white = (255, 255, 255)
-green = (61, 114, 40)
-black = (0, 0, 0)
+BG_COLOR = (61, 114, 40)
+ROAD_COLOR = (255, 255, 255)
+BLACK = (0, 0, 0)
+SCREEN_WIDTH = 1600
+SCREEN_HEIGHT = 900
 
 
 # Function to generate L-system string
@@ -83,10 +84,10 @@ def generate_connecting_lsystem(connecting_axiom, connecting_rules, iterations):
     return current_string
 
 
-def draw_l_system(screen, instructions, angle, length, depth_factor, mark=False):
+def draw_l_system(screen, instructions, start_pos, angle, length, depth_factor, mark=False):
     stack = []
     global marked_positions
-    x, y = 800, 600
+    x, y = start_pos
     heading = 0
     i = 0
 
@@ -101,10 +102,10 @@ def draw_l_system(screen, instructions, angle, length, depth_factor, mark=False)
             new_x = x + length * math.cos(math.radians(heading))
             new_y = y - length * math.sin(math.radians(heading))
             if char == 'F':
-                pygame.draw.line(screen, (255, 255, 255), (x, y), (new_x, new_y),
+                pygame.draw.line(screen, ROAD_COLOR, (x, y), (new_x, new_y),
                                  line_width)
             else:
-                pygame.draw.line(screen, (255, 255, 255), (x, y), (new_x, new_y), 1)
+                pygame.draw.line(screen, ROAD_COLOR, (x, y), (new_x, new_y), 1)
             x, y = new_x, new_y
         elif char == '+':
             heading -= angle
@@ -119,34 +120,35 @@ def draw_l_system(screen, instructions, angle, length, depth_factor, mark=False)
             new_x = x + depth_length * math.cos(math.radians(heading))
             new_y = y - depth_length * math.sin(math.radians(heading))
             if len(marked_positions) == 0:  # Draw thicker lines only for the first generation
-                pygame.draw.line(screen, (255, 255, 255), (x, y), (new_x, new_y), 3)  # Thicker lines for the first generation
+                pygame.draw.line(screen, ROAD_COLOR, (x, y), (new_x, new_y), 3)  # Thicker lines for the first generation
             else:
-                pygame.draw.line(screen, (255, 255, 255), (x, y), (new_x, new_y), 2)
+                pygame.draw.line(screen, ROAD_COLOR, (x, y), (new_x, new_y), 2)
             x, y = new_x, new_y
 
-        if i + 3 < len(instructions) and instructions[i:i + 9] == '[+FF]FFF|':
-            marked_positions.append((x, y, heading))
+        # dapat ang mangyayari dito, if may na-detect siyang [+FF]FFF| set na siya as marker tas hindi na kasama sa generation
+        if i + 3 < len(instructions) and instructions[i:i + 6] == '[+FF]F':
+            marked_positions.append((x, y, heading)) # append yung positions ng mga marker
             i += 3
 
         i += 1
 
     if len(marked_positions) == 0:
-        pygame.draw.line(screen, (255, 255, 255), (x, y), (x, y), 1)  # Reset line width to default
+        pygame.draw.line(screen, ROAD_COLOR, (x, y), (x, y), 1)  # Reset line width to default
 
     return marked_positions
 
 def draw_branching_l_system(screen, instructions, angle, length, depth_factor, x, y, heading):
+    # Note: hindi pwede palitan ang x & y kasi yung x,y na gamit neto is yung x,y ng marker sa main lsystem
     stack = []
     i = 0
     global marked_branching_position
-    markers = {}
 
     while i < len(instructions):
         char = instructions[i]
         if char == 'B' or char == 'C':
             new_x = x + length * math.cos(math.radians(heading))
             new_y = y - length * math.sin(math.radians(heading))
-            pygame.draw.line(screen, (255, 255, 255), (x, y), (new_x, new_y), 1)
+            pygame.draw.line(screen, ROAD_COLOR, (x, y), (new_x, new_y), 1)
             x, y = new_x, new_y
         elif char == 'A': # mag fo-forward pero hindi maglalagay ng line
             new_x = x + length * math.cos(math.radians(heading))
@@ -165,7 +167,7 @@ def draw_branching_l_system(screen, instructions, angle, length, depth_factor, x
             depth_length = length * len(stack) * depth_factor
             new_x = x + depth_length * math.cos(math.radians(heading))
             new_y = y - depth_length * math.sin(math.radians(heading))
-            pygame.draw.line(screen, (255, 255, 255), (x, y), (new_x, new_y), 1)
+            pygame.draw.line(screen, ROAD_COLOR, (x, y), (new_x, new_y), 1)
             x, y = new_x, new_y
 
         if i + 2 < len(instructions) and instructions[i:i + 9] == 'BB+BB[BB]':
@@ -174,7 +176,7 @@ def draw_branching_l_system(screen, instructions, angle, length, depth_factor, x
         i += 1
 
     if len(marked_positions) == 0:
-        pygame.draw.line(screen, (255, 255, 255), (x, y), (x, y), 1)  # Reset line width to default
+        pygame.draw.line(screen, ROAD_COLOR, (x, y), (x, y), 1)  # Reset line width to default
 
     return marked_branching_positions
 
@@ -184,9 +186,11 @@ def main():
     global marked_branching_positions
 
     pygame.init()
-    screen = pygame.display.set_mode((1600, 900))
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("L-System")
-    screen.fill(green)
+    screen.fill(BG_COLOR)
+
+    start_pos = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
 
     num_iterations = int(input("Enter the number of iterations (1-10): "))
 
@@ -209,7 +213,7 @@ def main():
     # Draw main L-system
     step_size = 10
     random_angle_main = random.uniform(45, 90)
-    marked_positions = draw_l_system(screen, main_instructions, random_angle_main, step_size, depth_factor, mark=True)
+    marked_positions = draw_l_system(screen, main_instructions, start_pos, random_angle_main, step_size, depth_factor, mark=True)
 
     # Generate and draw branching using the main road marker
     if marked_positions:
