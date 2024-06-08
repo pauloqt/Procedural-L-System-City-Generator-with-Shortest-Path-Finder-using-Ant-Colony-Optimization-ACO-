@@ -16,16 +16,20 @@ branching_rules = {
 }
 
 # rules para sa mag co-connect ng 2nd generation
-connecting_axiom = "C"
+connecting_axiom = "CD"
 connecting_rules = {
     "C": [
-        "CCC", "C[+CC]", "C[-CC]"
+        "CC", "CC[+CC]", "CC[-CC]",
     ],
+    "D": [
+        "-FCD"
+    ]
 }
 
 depth_factor = 0.5
 marked_positions = [] # marker para sa branching
 marked_branching_positions = [] # marker para sa connecting ng road
+road_segments = []
 BG_COLOR = (61, 114, 40)
 ROAD_COLOR = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -102,6 +106,7 @@ def draw_l_system(screen, instructions, start_pos, angle, length, depth_factor, 
                                  line_width)
             else:
                 pygame.draw.line(screen, ROAD_COLOR, (x, y), (new_x, new_y), 1)
+            road_segments.append(((x, y), (new_x, new_y)))
             x, y = new_x, new_y
         elif char == '+':
             heading -= angle
@@ -153,6 +158,7 @@ def draw_branching_l_system(screen, instructions, angle, length, depth_factor, x
             new_x = x + length * math.cos(math.radians(heading))
             new_y = y - length * math.sin(math.radians(heading))
             pygame.draw.line(screen, ROAD_COLOR, (x, y), (new_x, new_y), 1)
+            road_segments.append(((x, y), (new_x, new_y)))
             x, y = new_x, new_y
         elif char == '+':
             heading -= angle
@@ -174,6 +180,41 @@ def draw_branching_l_system(screen, instructions, angle, length, depth_factor, x
 
     return marked_branching_positions
 
+def does_rect_intersect_line(rect, line_start, line_end):
+    rect_x, rect_y, rect_width, rect_height = rect
+    lines = [
+        ((rect_x, rect_y), (rect_x + rect_width, rect_y)),
+        ((rect_x, rect_y), (rect_x, rect_y + rect_height)),
+        ((rect_x + rect_width, rect_y), (rect_x + rect_width, rect_y + rect_height)),
+        ((rect_x, rect_y + rect_height), (rect_x + rect_width, rect_y + rect_height)),
+    ]
+    for rect_line_start, rect_line_end in lines:
+        if do_lines_intersect(rect_line_start, rect_line_end, line_start, line_end):
+            return True
+    return False
+
+def do_lines_intersect(a_start, a_end, b_start, b_end):
+    def ccw(A, B, C):
+        return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
+    A = a_start
+    B = a_end
+    C = b_start
+    D = b_end
+    return ccw(A, C, D) != ccw(B, C, D) and ccw(A, B, C) != ccw(A, B, D)
+
+def draw_random_buildings(screen, positions, num_rectangles=3):
+    for pos in positions:
+        for _ in range(num_rectangles):
+            width = random.uniform(5, 20)
+            height = random.uniform(5, 20)
+            x, y = pos
+            for _ in range(10):  # Attempt up to 10 times to find a non-overlapping position
+                offset_x = random.uniform(-50, 50)
+                offset_y = random.uniform(-50, 50)
+                rect = (x + offset_x, y + offset_y, width, height)
+                if not any(does_rect_intersect_line(rect, line_start, line_end) for line_start, line_end in road_segments):
+                    pygame.draw.rect(screen, BLACK, rect)  # Fill the rectangle
+                    break
 # Main function
 def main():
     pygame.init()
@@ -187,7 +228,7 @@ def main():
 
     # if no. iterations ay equal sa input babawasan niya yung iteration
     if num_iterations == 3:
-        main_instructions = generate_l_system(main_axiom, main_rules, num_iterations)
+        main_instructions = generate_l_system(main_axiom, main_rules, int(num_iterations - 0.01))
     elif num_iterations == 4 or num_iterations == 5:
         main_instructions = generate_l_system(main_axiom, main_rules, int(num_iterations - 0.1))
     elif num_iterations == 6 or num_iterations == 7:
@@ -260,7 +301,7 @@ def main():
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 4:
                 branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules,
-                                                                    int(num_iterations - 1.0))
+                                                                    int(num_iterations - 1.5))
                 draw_branching_l_system(screen, branching_instructions, angle_branching,
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 5:
@@ -289,24 +330,12 @@ def main():
                     draw_branching_l_system(screen, branching_instructions, angle_branching,
                                             step_size * 2, depth_factor, x, y, heading)
 
-    # Function for the random buildings
-    # def draw_random_buildings(screen, positions, num_rectangles):
-    #     for pos in positions:
-    #         for _ in range(num_rectangles):
-    #             # Random size
-    #             width = random.uniform(5, 8)
-    #             height = random.uniform(5, 8)
-    #
-    #             # Draw the rectangle at the specified position
-    #             x, y = pos
-    #             x += 50
-    #             y += 50
-    #             pygame.draw.rect(screen, black, (x, y, width, height))
-    #
-    # # Draw buildings at marked_branching_position
-    # if marked_positions:
-    #     positions = [(pos[0], pos[1]) for pos in marked_positions]
-    #     draw_random_buildings(screen, positions, num_iterations - 1)
+    num_rectangles = 5
+    # Draw buildings at marked_branching_position
+    if marked_positions:
+        positions = [(pos[0], pos[1]) for pos in marked_positions]
+        draw_random_buildings(screen, positions, num_rectangles)
+
 
     # Print marked positions
     # print("Marked Positions:", marked_positions)
