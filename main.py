@@ -9,7 +9,7 @@ WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 GREEN = (61, 114, 40)
-GRAY = (50, 50, 50)  # Define a gray color for buildings
+GRAY = (65, 65, 65)  # Define a gray color for buildings
 
 # Define the axiom and production rules
 axiom = "X"
@@ -65,6 +65,61 @@ def point_in_polygon(point, polygon):
         p1x, p1y = p2x, p2y
     return inside
 
+def find_closest_node(node, nodes, edges):
+    node_x, node_y = node
+    min_distance = float('inf')
+    closest_node = None
+
+    for other_node in nodes:
+        if other_node != node:
+            other_x, other_y = other_node
+            distance = math.sqrt((node_x - other_x) ** 2 + (node_y - other_y) ** 2)
+            if distance < min_distance:
+                min_distance = distance
+                closest_node = other_node
+
+    return closest_node, min_distance
+
+def is_dead_end_node(node, graph):
+    connections = graph[node]
+    return len(connections) <= 1  # Node with 0 or 1 connection is considered a dead-end
+
+def connect_dead_ends(nodes, edges, surface):
+    n_nodes = len(nodes)
+    graph = {i: set() for i in range(n_nodes)}  # Use a set to store connected nodes
+    for (x1, y1), (x2, y2) in edges:
+        if (x1, y1) in nodes and (x2, y2) in nodes:
+            i = nodes.index((x1, y1))
+            j = nodes.index((x2, y2))
+            graph[i].add(j)
+            graph[j].add(i)
+
+    dead_end_nodes = [node for node in range(n_nodes) if len(graph[node]) <= 1]
+    print(dead_end_nodes)
+
+    for dead_end_node in dead_end_nodes:
+        unconnected_nodes = [n for n in range(n_nodes) if n not in graph[dead_end_node]]
+        closest_node_index, distance = find_closest_node_from_set(nodes[dead_end_node], [nodes[n] for n in unconnected_nodes])
+        if closest_node_index is not None and distance <= 5 * 15:  # Check if the distance is less than or equal to 5 steps
+            if closest_node_index not in graph[dead_end_node]:  # Check if the closest node is not already connected
+                graph[dead_end_node].add(closest_node_index)
+                graph[closest_node_index].add(dead_end_node)
+                #pygame.draw.line(surface, RED, nodes[dead_end_node], nodes[closest_node_index], 1)
+                print("draw", nodes.index(nodes[dead_end_node]), "to", closest_node_index)
+
+def find_closest_node_from_set(node, node_set):
+    node_x, node_y = node
+    min_distance = float('inf')
+    closest_node_index = None
+
+    for i, other_node in enumerate(node_set):
+        other_x, other_y = other_node
+        distance = math.sqrt((node_x - other_x) ** 2 + (node_y - other_y) ** 2)
+        if distance < min_distance:
+            min_distance = distance
+            closest_node_index = i
+
+    return closest_node_index, min_distance
 
 def draw_buildings(surface, nodes, edges):
     polygons = []
@@ -82,7 +137,7 @@ def draw_buildings(surface, nodes, edges):
     for polygon in polygons:
         area = calculate_polygon_area(polygon)
         if area > 0:
-            building_size = int(math.sqrt(area) * 0.3)  # Scale down building size to fit within the polygon
+            building_size = int(math.sqrt(area) * 0.2)  # Scale down building size to fit within the polygon
 
             # Compute the bounding box for the polygon
             min_x = min(p[0] for p in polygon)
@@ -103,35 +158,47 @@ def draw_buildings(surface, nodes, edges):
                         break
 
                 if not overlaps and point_in_polygon((building_rect.centerx, building_rect.centery), polygon):
-                    pygame.draw.rect(surface, GRAY, building_rect)
+                    pygame.draw.rect(surface, BLACK, building_rect)
                     break  # Building successfully placed
                 attempts += 1
 
 # Define the function to draw the l-system
 def draw_lsystem(sequence, step_size, surface):
-    stack = [] # storage of the current direction and angle of the turtle para ma-remember kapag babalikan.
-    nodes = [] # storage of the nodes (each move forward represents 1 node)
+    stack = []  # Storage of the current direction and angle of the turtle to remember when backtracking
+    nodes = []  # Storage of the nodes (each move forward represents 1 node)
     edges = []
     x, y = surface.get_width() // 2, surface.get_height() // 2
     angle = 90  # Start facing up
 
     for char in sequence:
-        if char == "F": # move forward
+        if char == "F":  # Move forward
             dx = step_size * math.cos(angle * math.pi / 180)
             dy = step_size * math.sin(angle * math.pi / 180)
             new_x, new_y = x + dx, y + dy
-            pygame.draw.line(surface, WHITE, (x, y), (new_x, new_y), 2)
-            pygame.draw.circle(surface, BLUE, (x, y), 2)
-            nodes.append((new_x, new_y)) # add the node to the node list
+
+            # Draw a thicker line for the road
+            pygame.draw.line(surface, GRAY, (x, y), (new_x, new_y), 7)  # Change the line thickness to 5
+
+            # Draw a rectangular node marker oriented according to the current angle
+            node_marker_size = 2  # Adjust the size of the node marker as desired
+            node_marker_rect = pygame.Rect(x - node_marker_size // 2, y - node_marker_size // 2, node_marker_size, node_marker_size)
+            rotated_node_marker = pygame.Surface(node_marker_rect.size, pygame.SRCALPHA)  # Create a transparent surface with the same size as the rectangle
+            rotated_node_marker.fill((0, 0, 0, 0))  # Fill the surface with transparent color
+            pygame.draw.rect(rotated_node_marker, WHITE,(0, 0, node_marker_size, node_marker_size))  # Draw the rectangle on the surface
+            rotated_node_marker = pygame.transform.rotate(rotated_node_marker, angle - 90)  # Rotate the surface
+
+            surface.blit(rotated_node_marker, (x - node_marker_size // 2, y - node_marker_size // 2))
+
+            nodes.append((new_x, new_y))  # Add the node to the node list
             edges.append(((x, y), (new_x, new_y)))
             x, y = new_x, new_y
-        elif char == "+": # Rotate turtle 90 degrees right
+        elif char == "+":  # Rotate turtle 90 degrees right
             angle += 90
-        elif char == "-": # Rotate turtle 90 degrees left
+        elif char == "-":  # Rotate turtle 90 degrees left
             angle -= 90
-        elif char == "[": # Push current position and angle onto the stack ; This means, the turtle will start a new branch (start of a recursion). Ino-note niya para mabalikan
+        elif char == "[":  # Push current position and angle onto the stack (start of a new branch)
             stack.append((x, y, angle))
-        elif char == "]": # Pop position and angle from the stack, para babalik siya sa first position ng branch
+        elif char == "]":  # Pop position and angle from the stack (return to the previous branch)
             x, y, angle = stack.pop()
 
     return nodes, edges
@@ -227,6 +294,9 @@ def main():
 
     # Draw buildings or houses
     draw_buildings(surface, nodes, edges)
+
+    # Connect dead-end nodes
+    connect_dead_ends(nodes, edges, surface)
 
     #----------------------------------------------------Initialize Shortest Path-----------------------------------------------------------
     # Create adjacency list - a graph where naka-list lahat ng nodes and its neighboring/adjacent nodes and its euclidean distance to that node.
