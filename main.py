@@ -9,6 +9,7 @@ WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 GREEN = (61, 114, 40)
+GRAY = (50, 50, 50)  # Define a gray color for buildings
 
 # Define the axiom and production rules
 axiom = "X"
@@ -20,7 +21,8 @@ rules = {
         "F[X]F[+X]+F[-X]X",
         "F[+X][-X]F+F[X]+F[+FX]-X",  # New rule for curved paths
         "FF[+X][+X]FF[-X][-X]",  # New rule for intersections
-        "F[X]+[X]+F-F"  # New rule for branching paths
+        "F[X]+[X]+F-F",  # New rule for branching paths
+        "FX+F+FX-F-F"  # New rule for creating loops
     ],
     "F": [
         "FF",
@@ -28,6 +30,82 @@ rules = {
         "F[+FF][-FF]F"  # New rule for curved paths
     ],
 }
+
+def calculate_polygon_area(polygon):
+    """
+    Helper function to calculate the area of a polygon.
+    Implements the Shoelace formula.
+    """
+    area = 0
+    for i in range(len(polygon)):
+        j = (i + 1) % len(polygon)
+        area += polygon[i][0] * polygon[j][1]
+        area -= polygon[j][0] * polygon[i][1]
+    area = abs(area) / 2
+    return area
+
+def point_in_polygon(point, polygon):
+    """
+    Helper function to determine if a point is inside a polygon.
+    Implements the ray-casting algorithm.
+    """
+    x, y = point
+    n = len(polygon)
+    inside = False
+    p1x, p1y = polygon[0]
+    for i in range(n + 1):
+        p2x, p2y = polygon[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+    return inside
+
+
+def draw_buildings(surface, nodes, edges):
+    polygons = []
+    current_polygon = []
+
+    for i, edge in enumerate(edges):
+        start, end = edge
+        current_polygon.append(start)
+        if i == len(edges) - 1 or end != edges[(i + 1) % len(edges)][0]:
+            current_polygon.append(end)
+            if len(current_polygon) >= 3:  # Ensure we have a valid polygon
+                polygons.append(current_polygon)
+            current_polygon = [end]
+
+    for polygon in polygons:
+        area = calculate_polygon_area(polygon)
+        if area > 0:
+            building_size = int(math.sqrt(area) * 0.3)  # Scale down building size to fit within the polygon
+
+            # Compute the bounding box for the polygon
+            min_x = min(p[0] for p in polygon)
+            max_x = max(p[0] for p in polygon)
+            min_y = min(p[1] for p in polygon)
+            max_y = max(p[1] for p in polygon)
+
+            attempts = 0
+            while attempts < 100:  # Try up to 100 times to find a valid position
+                building_x = random.randint(min_x, max_x - building_size)
+                building_y = random.randint(min_y, max_y - building_size)
+                building_rect = pygame.Rect(building_x, building_y, building_size, building_size)
+
+                overlaps = False
+                for edge in edges:
+                    if building_rect.clipline(edge):
+                        overlaps = True
+                        break
+
+                if not overlaps and point_in_polygon((building_rect.centerx, building_rect.centery), polygon):
+                    pygame.draw.rect(surface, GRAY, building_rect)
+                    break  # Building successfully placed
+                attempts += 1
 
 # Define the function to draw the l-system
 def draw_lsystem(sequence, step_size, surface):
@@ -146,6 +224,9 @@ def main():
     # Generate the L-system and draw the city on the larger surface
     sequence = generate_lsystem(axiom, rules, iterations)
     nodes, edges = draw_lsystem(sequence, step_size=15, surface=surface)
+
+    # Draw buildings or houses
+    draw_buildings(surface, nodes, edges)
 
     #----------------------------------------------------Initialize Shortest Path-----------------------------------------------------------
     # Create adjacency list - a graph where naka-list lahat ng nodes and its neighboring/adjacent nodes and its euclidean distance to that node.
