@@ -146,10 +146,12 @@ def connect_dead_end_nodes(nodes, edges, surface):
 
                 # Check if the nodes are aligned horizontally or vertically
                 if dead_end_node[0] == node[0] or dead_end_node[1] == node[1]:
-                    distance = math.sqrt((nodes[dead_end_node_index][0] - nodes[node_index][0]) ** 2 + (nodes[dead_end_node_index][1] - nodes[node_index][1]) ** 2)
+                    distance = math.sqrt((nodes[dead_end_node_index][0] - nodes[node_index][0]) ** 2 + (
+                            nodes[dead_end_node_index][1] - nodes[node_index][1]) ** 2)
 
                     # Check if the edge is not already existing
-                    if (nodes[dead_end_node_index], nodes[node_index]) not in existing_edges and (nodes[node_index], nodes[dead_end_node_index]) not in existing_edges:
+                    if (nodes[dead_end_node_index], nodes[node_index]) not in existing_edges and (
+                            nodes[node_index], nodes[dead_end_node_index]) not in existing_edges:
                         if distance < min_distance:
                             closest_node = node
                             min_distance = distance
@@ -157,15 +159,34 @@ def connect_dead_end_nodes(nodes, edges, surface):
             if closest_node is not None:
                 dead_end_node_index = nodes.index(dead_end_node)
                 closest_node_index = nodes.index(closest_node)
-                new_edge = (nodes[dead_end_node_index], nodes[closest_node_index])
-                # Ensure that the new edge is not already in the existing edges set
-                if new_edge not in existing_edges and (new_edge[1], new_edge[0]) not in existing_edges:
-                    pygame.draw.line(surface, GRAY, nodes[dead_end_node_index], nodes[closest_node_index], 7)
-                    edges.append(new_edge)
-                    connected_nodes[dead_end_node].add(closest_node)
-                    connected_nodes[closest_node].add(dead_end_node)
-                    existing_edges.add(new_edge)
-                    existing_edges.add((new_edge[1], new_edge[0]))
+
+                # Calculate the step size
+                step_size = 20
+
+                # Calculate the number of steps required to reach the closest node
+                num_steps = int(min_distance / step_size)
+
+                # Calculate the step increments in x and y directions
+                step_x = (closest_node[0] - dead_end_node[0]) / num_steps
+                step_y = (closest_node[1] - dead_end_node[1]) / num_steps
+
+                # Draw line segments representing each step and add new nodes to the list
+                for i in range(num_steps):
+                    start_point = (int(dead_end_node[0] + i * step_x), int(dead_end_node[1] + i * step_y))
+                    end_point = (int(dead_end_node[0] + (i + 1) * step_x), int(dead_end_node[1] + (i + 1) * step_y))
+                    pygame.draw.line(surface, GRAY, start_point, end_point, 7)
+                    edges.append((start_point, end_point))
+
+                    # Add the new node to the nodes list
+                    new_node = (int(dead_end_node[0] + (i + 1) * step_x), int(dead_end_node[1] + (i + 1) * step_y))
+                    nodes.append(new_node)
+
+                # Add the nodes to the connected nodes dictionary
+                connected_nodes[dead_end_node].add(closest_node)
+                connected_nodes[closest_node].add(dead_end_node)
+                existing_edges.add((nodes[dead_end_node_index], nodes[closest_node_index]))
+                existing_edges.add((nodes[closest_node_index], nodes[dead_end_node_index]))
+
 
 #---------------------------------------------------- Functions: Creating L-System City  -----------------------------------------------------------
 
@@ -174,9 +195,8 @@ def draw_lsystem(sequence, step_size, surface):
     stack = []  # Storage of the current direction and angle of the turtle to remember when backtracking
     nodes = []  # Storage of the nodes (each move forward represents 1 node)
     edges = []
-    segments_drawn = 0  # Counter for segments (F)
     x, y = surface.get_width() // 2, surface.get_height() // 2
-    angle = 90  # Start facing up
+    angle = 60 # Start facing up
 
     for char in sequence:
 
@@ -193,9 +213,9 @@ def draw_lsystem(sequence, step_size, surface):
             x, y = new_x, new_y
 
         elif char == "+":  # Rotate turtle 90 degrees right
-            angle += 90
+            angle += 60
         elif char == "-":  # Rotate turtle 90 degrees left
-            angle -= 90
+            angle -= 60
         elif char == "[":  # Push current position and angle onto the stack (start of a new branch)
             stack.append((x, y, angle))
         elif char == "]":  # Pop position and angle from the stack (return to the previous branch)
