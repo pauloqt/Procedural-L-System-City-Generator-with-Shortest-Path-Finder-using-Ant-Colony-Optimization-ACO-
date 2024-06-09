@@ -164,7 +164,7 @@ def connect_dead_end_nodes(nodes, edges, surface):
 #---------------------------------------------------- Functions: Creating L-System City  -----------------------------------------------------------
 
 # Define the function to draw the l-system
-def draw_lsystem(sequence, step_size, surface, max_segments):
+def draw_lsystem(sequence, step_size, surface):
     stack = []  # Storage of the current direction and angle of the turtle to remember when backtracking
     nodes = []  # Storage of the nodes (each move forward represents 1 node)
     edges = []
@@ -195,35 +195,43 @@ def draw_lsystem(sequence, step_size, surface, max_segments):
         elif char == "]":  # Pop position and angle from the stack (return to the previous branch)
             x, y, angle = stack.pop()
 
-    return nodes, edges, segments_drawn
+    return nodes, edges
 
 # Generate the string of L-system starting with the axiom
 def generate_lsystem(axiom, rules, max_segments):
-    sequence = axiom  # start the L-System sequence with the axiom
-    total_segments = 0  # Counter for total segments (F)
+    sequence = axiom  # Start the L-System sequence with the axiom
+
     while True:
-        f_count = sequence.count('F')  # Count the occurrences of 'F' in the current sequence
-        total_segments += f_count  # Update the total count of 'F' segments
-
-        if total_segments >= max_segments:  # Check if the maximum segments limit is reached
-            excess_segments = total_segments - max_segments  # Calculate the excess segments
-            if excess_segments > 0:
-                # Find the position of the last occurrence of 'F' before the excess segments
-                last_f_index = sequence.rfind('F', 0, len(sequence) - excess_segments)
-                # Truncate the sequence up to the last 'F' before the excess segments
-                sequence = sequence[:last_f_index + 1]
-            break
-
         next_sequence = ""
-        for char in sequence:  # mag-loop sa sequence
-            if char in rules:  # if ang character na nasa sequence ay key sa production rule (X or F), then mamili ng random rule sa key na yon.
+        for char in sequence:  # Loop through the sequence
+            if char in rules:  # Check if the character is a key in the production rules (X or F)
                 next_sequence += random.choice(rules[char])
-            else:  # if ang character ay hindi key, like ( +, -, [, ], then skip)
+            else:  # If the character is not a key, like ( +, -, [, ], then keep it as it is
                 next_sequence += char
 
         sequence = next_sequence
-    print(sequence)
 
+        # Count the total number of segments (F) in the sequence
+        total_segments = sequence.count('F')
+
+        if total_segments < max_segments:  # Continue looping until the total segments are less than max_segments
+            continue
+        else:
+            # Find the index of the max_segments-th occurrence of 'F' in the sequence
+            f_index = -1
+            segments_found = 0
+            for i, char in enumerate(sequence):
+                if char == 'F':
+                    segments_found += 1
+                    if segments_found == max_segments:
+                        f_index = i
+                        break
+
+            # Cut the sequence from the beginning to the index of the max_segments-th occurrence of 'F'
+            sequence = sequence[:f_index + 1]
+            break
+
+    print(sequence)
     return sequence
 #---------------------------------------------------- Functions: Creating Shortest Path -----------------------------------------------------------
 
@@ -300,7 +308,7 @@ def main():
 
     # Generate the L-system and draw the city on the larger surface
     sequence = generate_lsystem(axiom, rules, segments)
-    nodes, edges, segments_drawn = draw_lsystem(sequence, step_size=15, surface=surface, max_segments=segments)
+    nodes, edges = draw_lsystem(sequence, step_size=15, surface=surface)
 
     # Connect the dead-end nodes
     connect_dead_end_nodes(nodes, edges, surface)
