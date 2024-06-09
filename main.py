@@ -164,14 +164,16 @@ def connect_dead_end_nodes(nodes, edges, surface):
 #---------------------------------------------------- Functions: Creating L-System City  -----------------------------------------------------------
 
 # Define the function to draw the l-system
-def draw_lsystem(sequence, step_size, surface):
+def draw_lsystem(sequence, step_size, surface, max_segments):
     stack = []  # Storage of the current direction and angle of the turtle to remember when backtracking
     nodes = []  # Storage of the nodes (each move forward represents 1 node)
     edges = []
+    segments_drawn = 0  # Counter for segments (F)
     x, y = surface.get_width() // 2, surface.get_height() // 2
     angle = 90  # Start facing up
 
     for char in sequence:
+
         if char == "F":  # Move forward
             dx = step_size * math.cos(angle * math.pi / 180)
             dy = step_size * math.sin(angle * math.pi / 180)
@@ -193,22 +195,36 @@ def draw_lsystem(sequence, step_size, surface):
         elif char == "]":  # Pop position and angle from the stack (return to the previous branch)
             x, y, angle = stack.pop()
 
-    return nodes, edges
+    return nodes, edges, segments_drawn
 
 # Generate the string of L-system starting with the axiom
-def generate_lsystem(axiom, rules, iterations):
-    sequence = axiom # start the L-System sequence with the axiom
-    for _ in range(iterations): # loop kung ilan ang iteration
-        next_sequence = ""
-        for char in sequence: # mag-loop sa sequence
-            if char in rules: # if ang character na nasa sequence ay key sa prdouction rule (X or F), then mamili ng random rule sa key na yon.
-                next_sequence += random.choice(rules[char])
-            else:             # if ang character ay hindi key, like ( +, -, [, ], then skip)
-                next_sequence += char
-        sequence = next_sequence
-        print(sequence)
-    return sequence
+def generate_lsystem(axiom, rules, max_segments):
+    sequence = axiom  # start the L-System sequence with the axiom
+    total_segments = 0  # Counter for total segments (F)
+    while True:
+        f_count = sequence.count('F')  # Count the occurrences of 'F' in the current sequence
+        total_segments += f_count  # Update the total count of 'F' segments
 
+        if total_segments >= max_segments:  # Check if the maximum segments limit is reached
+            excess_segments = total_segments - max_segments  # Calculate the excess segments
+            if excess_segments > 0:
+                # Find the position of the last occurrence of 'F' before the excess segments
+                last_f_index = sequence.rfind('F', 0, len(sequence) - excess_segments)
+                # Truncate the sequence up to the last 'F' before the excess segments
+                sequence = sequence[:last_f_index + 1]
+            break
+
+        next_sequence = ""
+        for char in sequence:  # mag-loop sa sequence
+            if char in rules:  # if ang character na nasa sequence ay key sa production rule (X or F), then mamili ng random rule sa key na yon.
+                next_sequence += random.choice(rules[char])
+            else:  # if ang character ay hindi key, like ( +, -, [, ], then skip)
+                next_sequence += char
+
+        sequence = next_sequence
+    print(sequence)
+
+    return sequence
 #---------------------------------------------------- Functions: Creating Shortest Path -----------------------------------------------------------
 
 def heuristic(a, b): #returns the euclidean distance between 2 nodes
@@ -258,8 +274,8 @@ def astar(graph, start, end, nodes):
 
     return None
 
-# Prompt the user for the number of iterations
-iterations = int(input("Enter the number of iterations (1-10): "))
+# Prompt the user for the number of segments
+segments = int(input("Enter the number of segments (F) for the L-system: "))
 
 #----------------------------------------------------Initialize Pygame-----------------------------------------------------------
 pygame.init()
@@ -283,8 +299,8 @@ def main():
     global scroll_x, scroll_y
 
     # Generate the L-system and draw the city on the larger surface
-    sequence = generate_lsystem(axiom, rules, iterations)
-    nodes, edges = draw_lsystem(sequence, step_size=15, surface=surface)
+    sequence = generate_lsystem(axiom, rules, segments)
+    nodes, edges, segments_drawn = draw_lsystem(sequence, step_size=15, surface=surface, max_segments=segments)
 
     # Connect the dead-end nodes
     connect_dead_end_nodes(nodes, edges, surface)
