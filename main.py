@@ -31,6 +31,7 @@ rules = {
     ],
 }
 
+#---------------------------------------------------- Functions: Creating Buildings -----------------------------------------------------------
 def calculate_polygon_area(polygon):
     """
     Helper function to calculate the area of a polygon.
@@ -64,62 +65,6 @@ def point_in_polygon(point, polygon):
                         inside = not inside
         p1x, p1y = p2x, p2y
     return inside
-
-def find_closest_node(node, nodes, edges):
-    node_x, node_y = node
-    min_distance = float('inf')
-    closest_node = None
-
-    for other_node in nodes:
-        if other_node != node:
-            other_x, other_y = other_node
-            distance = math.sqrt((node_x - other_x) ** 2 + (node_y - other_y) ** 2)
-            if distance < min_distance:
-                min_distance = distance
-                closest_node = other_node
-
-    return closest_node, min_distance
-
-def is_dead_end_node(node, graph):
-    connections = graph[node]
-    return len(connections) <= 1  # Node with 0 or 1 connection is considered a dead-end
-
-def connect_dead_ends(nodes, edges, surface):
-    n_nodes = len(nodes)
-    graph = {i: set() for i in range(n_nodes)}  # Use a set to store connected nodes
-    for (x1, y1), (x2, y2) in edges:
-        if (x1, y1) in nodes and (x2, y2) in nodes:
-            i = nodes.index((x1, y1))
-            j = nodes.index((x2, y2))
-            graph[i].add(j)
-            graph[j].add(i)
-
-    dead_end_nodes = [node for node in range(n_nodes) if len(graph[node]) <= 1]
-    print(dead_end_nodes)
-
-    for dead_end_node in dead_end_nodes:
-        unconnected_nodes = [n for n in range(n_nodes) if n not in graph[dead_end_node]]
-        closest_node_index, distance = find_closest_node_from_set(nodes[dead_end_node], [nodes[n] for n in unconnected_nodes])
-        if closest_node_index is not None and distance <= 5 * 15:  # Check if the distance is less than or equal to 5 steps
-            if closest_node_index not in graph[dead_end_node]:  # Check if the closest node is not already connected
-                graph[dead_end_node].add(closest_node_index)
-                graph[closest_node_index].add(dead_end_node)
-                #pygame.draw.line(surface, RED, nodes[dead_end_node], nodes[closest_node_index], 1)
-                print("draw", nodes.index(nodes[dead_end_node]), "to", closest_node_index)
-
-def find_closest_node_from_set(node, node_set):
-    node_x, node_y = node
-    min_distance = float('inf')
-    closest_node_index = None
-
-    for i, other_node in enumerate(node_set):
-        other_x, other_y = other_node
-        distance = math.sqrt((node_x - other_x) ** 2 + (node_y - other_y) ** 2)
-        if distance < min_distance:
-            min_distance = distance
-            closest_node_index = i
-
-    return closest_node_index, min_distance
 
 def draw_buildings(surface, nodes, edges):
     polygons = []
@@ -162,6 +107,65 @@ def draw_buildings(surface, nodes, edges):
                     break  # Building successfully placed
                 attempts += 1
 
+#---------------------------------------------------- Functions: Connecting Dead End Nodes  -----------------------------------------------------------
+def find_closest_node(node, nodes, edges):
+    node_x, node_y = node
+    min_distance = float('inf')
+    closest_node = None
+
+    for other_node in nodes:
+        if other_node != node:
+            other_x, other_y = other_node
+            distance = math.sqrt((node_x - other_x) ** 2 + (node_y - other_y) ** 2)
+            if distance < min_distance:
+                min_distance = distance
+                closest_node = other_node
+
+    return closest_node, min_distance
+
+def is_dead_end_node(node, graph):
+    connections = graph[node]
+    return len(connections) <= 1  # Node with 0 or 1 connection is considered a dead-end
+
+def connect_dead_ends(nodes, edges, surface):
+    n_nodes = len(nodes)
+    graph = {i: set() for i in range(n_nodes)}  # Use a set to store connected nodes
+    for (x1, y1), (x2, y2) in edges:
+        if (x1, y1) in nodes and (x2, y2) in nodes:
+            i = nodes.index((x1, y1))
+            j = nodes.index((x2, y2))
+            graph[i].add(j)
+            graph[j].add(i)
+
+    dead_end_nodes = [node for node in range(n_nodes) if len(graph[node]) <= 1]
+
+    for dead_end_node in dead_end_nodes:
+        unconnected_nodes = [n for n in range(n_nodes) if n not in graph[dead_end_node]]
+        if unconnected_nodes:
+            closest_node_index, distance = find_closest_node_from_set(nodes[dead_end_node], [nodes[n] for n in unconnected_nodes])
+            if closest_node_index is not None and distance <= 5 * 15:  # Check if the distance is less than or equal to 5 steps
+                graph[dead_end_node].add(closest_node_index)
+                graph[closest_node_index].add(dead_end_node)
+                #pygame.draw.line(surface, RED, nodes[dead_end_node], nodes[closest_node_index], 1)
+
+    return graph
+
+def find_closest_node_from_set(node, node_set):
+    node_x, node_y = node
+    min_distance = float('inf')
+    closest_node_index = None
+
+    for i, other_node in enumerate(node_set):
+        other_x, other_y = other_node
+        distance = math.sqrt((node_x - other_x) ** 2 + (node_y - other_y) ** 2)
+        if distance < min_distance:
+            min_distance = distance
+            closest_node_index = i
+
+    return closest_node_index, min_distance
+
+#---------------------------------------------------- Functions: Creating L-System City  -----------------------------------------------------------
+
 # Define the function to draw the l-system
 def draw_lsystem(sequence, step_size, surface):
     stack = []  # Storage of the current direction and angle of the turtle to remember when backtracking
@@ -179,19 +183,10 @@ def draw_lsystem(sequence, step_size, surface):
             # Draw a thicker line for the road
             pygame.draw.line(surface, GRAY, (x, y), (new_x, new_y), 7)  # Change the line thickness to 5
 
-            # Draw a rectangular node marker oriented according to the current angle
-            node_marker_size = 2  # Adjust the size of the node marker as desired
-            node_marker_rect = pygame.Rect(x - node_marker_size // 2, y - node_marker_size // 2, node_marker_size, node_marker_size)
-            rotated_node_marker = pygame.Surface(node_marker_rect.size, pygame.SRCALPHA)  # Create a transparent surface with the same size as the rectangle
-            rotated_node_marker.fill((0, 0, 0, 0))  # Fill the surface with transparent color
-            pygame.draw.rect(rotated_node_marker, WHITE,(0, 0, node_marker_size, node_marker_size))  # Draw the rectangle on the surface
-            rotated_node_marker = pygame.transform.rotate(rotated_node_marker, angle - 90)  # Rotate the surface
-
-            surface.blit(rotated_node_marker, (x - node_marker_size // 2, y - node_marker_size // 2))
-
             nodes.append((new_x, new_y))  # Add the node to the node list
             edges.append(((x, y), (new_x, new_y)))
             x, y = new_x, new_y
+
         elif char == "+":  # Rotate turtle 90 degrees right
             angle += 90
         elif char == "-":  # Rotate turtle 90 degrees left
@@ -200,6 +195,10 @@ def draw_lsystem(sequence, step_size, surface):
             stack.append((x, y, angle))
         elif char == "]":  # Pop position and angle from the stack (return to the previous branch)
             x, y, angle = stack.pop()
+
+    # Add white markers at the nodes' coordinates
+    for node in nodes:
+        pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 2, 2))
 
     return nodes, edges
 
@@ -216,6 +215,8 @@ def generate_lsystem(axiom, rules, iterations):
         sequence = next_sequence
         print(sequence)
     return sequence
+
+#---------------------------------------------------- Functions: Creating Shortest Path -----------------------------------------------------------
 
 def heuristic(a, b): #returns the euclidean distance between 2 nodes
     return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
@@ -296,7 +297,7 @@ def main():
     draw_buildings(surface, nodes, edges)
 
     # Connect dead-end nodes
-    connect_dead_ends(nodes, edges, surface)
+    graph = connect_dead_ends(nodes, edges, surface)
 
     #----------------------------------------------------Initialize Shortest Path-----------------------------------------------------------
     # Create adjacency list - a graph where naka-list lahat ng nodes and its neighboring/adjacent nodes and its euclidean distance to that node.
