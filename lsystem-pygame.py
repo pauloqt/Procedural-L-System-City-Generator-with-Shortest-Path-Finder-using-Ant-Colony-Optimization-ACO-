@@ -19,10 +19,10 @@ branching_rules = {
 connecting_axiom = "CD"
 connecting_rules = {
     "C": [
-        "CC", "CC[+CC]", "CC[-CC]",
+        "CC", "CC[+CC]", "CC[-CC]", "[+CC]", "CC[+DC][+C]", "DD+CCD+"
     ],
     "D": [
-        "-FCD"
+        "DD", "-FCD", "-DC-D"
     ]
 }
 
@@ -31,7 +31,7 @@ marked_positions = [] # marker para sa branching
 marked_branching_positions = [] # marker para sa connecting ng road
 road_segments = []
 BG_COLOR = (61, 114, 40)
-ROAD_COLOR = (255, 255, 255)
+ROAD_COLOR = (226, 231, 221)
 BLACK = (0, 0, 0)
 SCREEN_WIDTH = 1600
 SCREEN_HEIGHT = 900
@@ -215,6 +215,7 @@ def draw_random_buildings(screen, positions, num_rectangles=3):
                 if not any(does_rect_intersect_line(rect, line_start, line_end) for line_start, line_end in road_segments):
                     pygame.draw.rect(screen, BLACK, rect)  # Fill the rectangle
                     break
+
 # Main function
 def main():
     pygame.init()
@@ -261,15 +262,15 @@ def main():
                 draw_branching_l_system(screen, branching_instructions, angle_branching,
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 4:
-                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 1.5))
+                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 1.3))
                 draw_branching_l_system(screen, branching_instructions, angle_branching,
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 5:
-                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 2.5))
+                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 2.3))
                 draw_branching_l_system(screen, branching_instructions, angle_branching,
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 6:
-                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 3.5))
+                branching_instructions = generate_branching_lsystem(branching_axiom, branching_rules, int(num_iterations - 3.1))
                 draw_branching_l_system(screen, branching_instructions, angle_branching,
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 7 or num_iterations == 8 or num_iterations == 9:
@@ -301,17 +302,17 @@ def main():
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 4:
                 branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules,
-                                                                    int(num_iterations - 1.5))
+                                                                    int(num_iterations - 1.2))
                 draw_branching_l_system(screen, branching_instructions, angle_branching,
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 5:
                 branching_instructions = generate_connecting_lsystem(connecting_axiom, connecting_rules,
-                                                                    int(num_iterations - 2.5))
+                                                                    int(num_iterations - 2.1))
                 draw_branching_l_system(screen, branching_instructions, angle_branching,
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 6:
                 branching_instructions =generate_connecting_lsystem(connecting_axiom, connecting_rules,
-                                                                    int(num_iterations - 4.0))
+                                                                    int(num_iterations - 3.3))
                 draw_branching_l_system(screen, branching_instructions, angle_branching,
                                         step_size * 2, depth_factor, x, y, heading)
             elif num_iterations == 7 or num_iterations == 8 or num_iterations == 9:
@@ -330,7 +331,7 @@ def main():
                     draw_branching_l_system(screen, branching_instructions, angle_branching,
                                             step_size * 2, depth_factor, x, y, heading)
 
-    num_rectangles = 5
+    num_rectangles = 2
     # Draw buildings at marked_branching_position
     if marked_positions:
         positions = [(pos[0], pos[1]) for pos in marked_positions]
