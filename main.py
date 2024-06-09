@@ -84,11 +84,11 @@ def draw_buildings(surface, nodes, edges):
         if area > 0:
             building_size = int(math.sqrt(area) * 0.2)  # Scale down building size to fit within the polygon
 
-            # Compute the bounding box for the polygon
-            min_x = min(p[0] for p in polygon)
-            max_x = max(p[0] for p in polygon)
-            min_y = min(p[1] for p in polygon)
-            max_y = max(p[1] for p in polygon)
+            # Compute the bounding box for the polygon and convert to integers
+            min_x = int(min(p[0] for p in polygon))
+            max_x = int(max(p[0] for p in polygon))
+            min_y = int(min(p[1] for p in polygon))
+            max_y = int(max(p[1] for p in polygon))
 
             attempts = 0
             while attempts < 100:  # Try up to 100 times to find a valid position
@@ -122,44 +122,50 @@ def connect_dead_end_nodes(nodes, edges, surface):
             connected_nodes[start].add(end)
             connected_nodes[end].add(start)
 
-    # Find the dead-end nodes (nodes with only one connected node)
-    dead_end_nodes = [node for node, connected in connected_nodes.items() if len(connected) == 1]
-
     # Create a set of existing edges to quickly check for redundancy
     existing_edges = set(edges)
 
-    # Connect the dead-end nodes to their closest unconnected node
-    for dead_end_node in dead_end_nodes:
-        closest_node = None
-        min_distance = float("inf")
+    while True:
+        # Find the dead-end nodes (nodes with only one connected node)
+        dead_end_nodes = [node for node, connected in connected_nodes.items() if len(connected) == 1]
 
-        # Get the set of connected nodes for the current dead-end node
-        connected_nodes_for_dead_end = connected_nodes[dead_end_node]
+        if not dead_end_nodes:
+            break  # Exit the loop if no more dead-end nodes are found
 
-        # Iterate over all nodes that are not the dead-end node itself and not already connected to the dead-end node
-        for node in all_nodes - {dead_end_node} - connected_nodes_for_dead_end:
-            dead_end_node_index = nodes.index(dead_end_node)
-            node_index = nodes.index(node)
-            distance = math.sqrt((nodes[dead_end_node_index][0] - nodes[node_index][0]) ** 2 + (nodes[dead_end_node_index][1] - nodes[node_index][1]) ** 2)
+        for dead_end_node in dead_end_nodes:
+            closest_node = None
+            min_distance = float("inf")
 
-            # Check if the edge is not already existing
-            if (nodes[dead_end_node_index], nodes[node_index]) not in existing_edges and (nodes[node_index], nodes[dead_end_node_index]) not in existing_edges:
-                if distance < min_distance:
-                    closest_node = node
-                    min_distance = distance
+            # Get the set of connected nodes for the current dead-end node
+            connected_nodes_for_dead_end = connected_nodes[dead_end_node]
 
-        if closest_node is not None:
-            dead_end_node_index = nodes.index(dead_end_node)
-            closest_node_index = nodes.index(closest_node)
-            new_edge = (nodes[dead_end_node_index], nodes[closest_node_index])
-            # Ensure that the new edge is not already in the existing edges set
-            if new_edge not in existing_edges and (new_edge[1], new_edge[0]) not in existing_edges:
-                pygame.draw.line(surface, GRAY, nodes[dead_end_node_index], nodes[closest_node_index], 7)
-                edges.append(new_edge)
-                connected_nodes[dead_end_node].add(closest_node)
-                connected_nodes[closest_node].add(dead_end_node)
-                existing_edges.add(new_edge)
-                existing_edges.add((new_edge[1], new_edge[0]))
+            # Iterate over all nodes that are not the dead-end node itself and not already connected to the dead-end node
+            for node in all_nodes - {dead_end_node} - connected_nodes_for_dead_end:
+                dead_end_node_index = nodes.index(dead_end_node)
+                node_index = nodes.index(node)
+
+                # Check if the nodes are aligned horizontally or vertically
+                if dead_end_node[0] == node[0] or dead_end_node[1] == node[1]:
+                    distance = math.sqrt((nodes[dead_end_node_index][0] - nodes[node_index][0]) ** 2 + (nodes[dead_end_node_index][1] - nodes[node_index][1]) ** 2)
+
+                    # Check if the edge is not already existing
+                    if (nodes[dead_end_node_index], nodes[node_index]) not in existing_edges and (nodes[node_index], nodes[dead_end_node_index]) not in existing_edges:
+                        if distance < min_distance:
+                            closest_node = node
+                            min_distance = distance
+
+            if closest_node is not None:
+                dead_end_node_index = nodes.index(dead_end_node)
+                closest_node_index = nodes.index(closest_node)
+                new_edge = (nodes[dead_end_node_index], nodes[closest_node_index])
+                # Ensure that the new edge is not already in the existing edges set
+                if new_edge not in existing_edges and (new_edge[1], new_edge[0]) not in existing_edges:
+                    pygame.draw.line(surface, GRAY, nodes[dead_end_node_index], nodes[closest_node_index], 7)
+                    edges.append(new_edge)
+                    connected_nodes[dead_end_node].add(closest_node)
+                    connected_nodes[closest_node].add(dead_end_node)
+                    existing_edges.add(new_edge)
+                    existing_edges.add((new_edge[1], new_edge[0]))
 
 #---------------------------------------------------- Functions: Creating L-System City  -----------------------------------------------------------
 
@@ -308,14 +314,14 @@ def main():
 
     # Generate the L-system and draw the city on the larger surface
     sequence = generate_lsystem(axiom, rules, segments)
-    nodes, edges = draw_lsystem(sequence, step_size=15, surface=surface)
+    nodes, edges = draw_lsystem(sequence, step_size=20, surface=surface)
 
     # Connect the dead-end nodes
     connect_dead_end_nodes(nodes, edges, surface)
 
     # Add white markers at the nodes' coordinates
     for node in nodes:
-        pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 2, 2))
+        pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 1.5, 1.5))
 
     # Draw buildings or houses
     draw_buildings(surface, nodes, edges)
