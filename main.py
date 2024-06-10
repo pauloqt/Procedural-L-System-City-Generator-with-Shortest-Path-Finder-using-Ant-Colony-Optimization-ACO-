@@ -196,7 +196,7 @@ def draw_lsystem(sequence, step_size, surface):
     nodes = []  # Storage of the nodes (each move forward represents 1 node)
     edges = []
     x, y = surface.get_width() // 2, surface.get_height() // 2
-    angle = 60 # Start facing up
+    angle = 90 # Start facing up
 
     for char in sequence:
 
@@ -213,9 +213,9 @@ def draw_lsystem(sequence, step_size, surface):
             x, y = new_x, new_y
 
         elif char == "+":  # Rotate turtle 90 degrees right
-            angle += 60
+            angle += 90
         elif char == "-":  # Rotate turtle 90 degrees left
-            angle -= 60
+            angle -= 90
         elif char == "[":  # Push current position and angle onto the stack (start of a new branch)
             stack.append((x, y, angle))
         elif char == "]":  # Pop position and angle from the stack (return to the previous branch)
