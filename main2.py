@@ -121,7 +121,6 @@ def astar(graph, start, end, nodes):
     return None
 
 # Set up the screen
-
 screen_width, screen_height = 1500, 700
 screen = pygame.display.set_mode((screen_width, screen_height))
 
