@@ -205,7 +205,7 @@ def connect_dead_end_nodes(nodes, edges, surface):
                 for i in range(num_steps):
                     start_point = (int(dead_end_node[0] + i * step_x), int(dead_end_node[1] + i * step_y))
                     end_point = (int(dead_end_node[0] + (i + 1) * step_x), int(dead_end_node[1] + (i + 1) * step_y))
-                    pygame.draw.line(surface, GRAY, start_point, end_point, 6)
+                    pygame.draw.line(surface, GRAY, start_point, end_point, 7)
                     edges.append((start_point, end_point))
 
                     # Add the new node to the nodes list
@@ -496,7 +496,7 @@ def main():
 
     # Generate the L-system and draw the city on the larger surface
     sequence = generate_lsystem(axiom, rules, segments)
-    nodes, edges = draw_lsystem(sequence, step_size=23, surface=surface)
+    nodes, edges = draw_lsystem(sequence, step_size=21, surface=surface)
 
     # Connect the dead-end nodes
     connect_dead_end_nodes(nodes, edges, surface)
@@ -525,11 +525,8 @@ def main():
     # Variables for start and end nodes
     start_node = None
     end_node = None
-
-    loop_start_node = None
     running = True
-
-    regenerate_flag = False
+    current_color = None
 
     while running:
         clock.tick(60)  # Limit the frame rate
@@ -546,7 +543,8 @@ def main():
                     surface.fill(GREEN)
                     start_node = None
                     end_node = None
-                    nodes, edges = draw_lsystem(sequence, step_size=23, surface=surface)
+                    current_color = None
+                    nodes, edges = draw_lsystem(sequence, step_size=21, surface=surface)
                     connect_dead_end_nodes(nodes, edges, surface)
                     for node in nodes:
                         pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 1.5, 1.5))
@@ -561,11 +559,12 @@ def main():
                     if distance < 10:  # radius kung gaano dapat kalapit ang click para ma-detect kung saang node siya
                         if start_node is None:
                             start_node = i
-                            pygame.draw.circle(surface, RED, (x, y), 5)
+                            current_color = (random.randint(128, 255), random.randint(128, 255), random.randint(128, 255))
+                            pygame.draw.circle(surface, current_color, (x, y), 5)
                             print("Click the end node")
                         elif end_node is None and i != start_node:  # Check if the clicked node is not the same as the start node
                             end_node = i
-                            pygame.draw.circle(surface, RED, (x, y), 5)
+                            pygame.draw.circle(surface, current_color, (x, y), 5)
                             print(f"Shortest path from node {start_node} to node {end_node}")
 
                             # Run A* to find the shortest path
@@ -575,7 +574,7 @@ def main():
                                 for node in range(len(shortest_path) - 1): #Loop to draw line from current node to next node until all the nodes in shortest path is drawn
                                     node_a = nodes[shortest_path[node]]
                                     node_b = nodes[shortest_path[node + 1]]
-                                    pygame.draw.line(surface, RED, node_a, node_b, 2)
+                                    pygame.draw.line(surface, current_color, node_a, node_b, 2)
 
                             # Reset start_node and end_node to None for the next selection
                             start_node = None
