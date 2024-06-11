@@ -2,14 +2,18 @@ import pygame
 import random
 import math
 import heapq
+import shapely.geometry as geo
+import shapely.ops as ops
+from shapely.affinity import translate
 
 # Define colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
-GREEN = (61, 114, 40)
+GREEN = (93, 168, 65)
 GRAY = (65, 65, 65)
+BLUE = (61, 114, 40)
 
 # Define the axiom and production rules
 axiom = "X"
@@ -20,14 +24,15 @@ rules_grid = {
         "F[+X]F[-X]+X",
         "F-[[X]+X]+F[+FX]-X",
         "F[X]F[+X]+F[-X]X",
-        "F[+X][-X]F+F[X]+F[+FX]-X",  # Curved paths
-        "F[X]+[X]+F-F",  # Branching paths
-        "FX+F+FX-F-F",  # Loops
+        "F[+X][-X]F+F[X]+F[+FX]-X",  # New rule for curved paths
+        "FF[+X][+X]FF[-X][-X]",  # New rule for intersections
+        "F[X]+[X]+F-F",  # New rule for branching paths
+        "FX+F+FX-F-F"  # New rule for creating loops
     ],
     "F": [
         "FF",
         "F[+F]F[-F]F",
-        "F[+FF][-FF]F",  # Curved paths
+        "F[+FF][-FF]F"  # New rule for curved paths
     ],
 }
 
@@ -129,7 +134,7 @@ def draw_buildings(surface, nodes, edges):
                         break
 
                 if not overlaps and point_in_polygon((building_rect.centerx, building_rect.centery), polygon):
-                    pygame.draw.rect(surface, BLACK, building_rect)
+                    pygame.draw.rect(surface, BLUE, building_rect)
                     break  # Building successfully placed
                 attempts += 1
 
@@ -200,7 +205,7 @@ def connect_dead_end_nodes(nodes, edges, surface):
                 for i in range(num_steps):
                     start_point = (int(dead_end_node[0] + i * step_x), int(dead_end_node[1] + i * step_y))
                     end_point = (int(dead_end_node[0] + (i + 1) * step_x), int(dead_end_node[1] + (i + 1) * step_y))
-                    pygame.draw.line(surface, GRAY, start_point, end_point, 7)
+                    pygame.draw.line(surface, GRAY, start_point, end_point, 6)
                     edges.append((start_point, end_point))
 
                     # Add the new node to the nodes list
@@ -386,6 +391,7 @@ def landing_page():
                         button_y <= mouse_pos[1] <= button_y + button_height:
                     print("Button Clicked!")
                     generate_city_page()
+                    generate_city_page()
                     return
 
         screen.blit(landing_image, (0, 0))
@@ -490,7 +496,7 @@ def main():
 
     # Generate the L-system and draw the city on the larger surface
     sequence = generate_lsystem(axiom, rules, segments)
-    nodes, edges = draw_lsystem(sequence, step_size=20, surface=surface)
+    nodes, edges = draw_lsystem(sequence, step_size=23, surface=surface)
 
     # Connect the dead-end nodes
     connect_dead_end_nodes(nodes, edges, surface)
@@ -523,12 +529,29 @@ def main():
     loop_start_node = None
     running = True
 
+    regenerate_flag = False
+
     while running:
         clock.tick(60)  # Limit the frame rate
 
         for event in pygame.event.get(): # mag-loop sa event/action ni user (e.g. clicks, close window)
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type ==pygame.KEYDOWN:
+                if event.key == pygame.K_r: #Regenerate city with the same parameter
+                    main()
+                if event.key == pygame.K_g: #Generate city with new parameter
+                    generate_city_page()
+                if event.key == pygame.K_n: #Create New Slate of the Current City
+                    surface.fill(GREEN)
+                    start_node = None
+                    end_node = None
+                    nodes, edges = draw_lsystem(sequence, step_size=23, surface=surface)
+                    connect_dead_end_nodes(nodes, edges, surface)
+                    for node in nodes:
+                        pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 1.5, 1.5))
+                    draw_buildings(surface, nodes, edges)
+
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 print("clicked")
                 mouse_x = event.pos[0] + scroll_x
