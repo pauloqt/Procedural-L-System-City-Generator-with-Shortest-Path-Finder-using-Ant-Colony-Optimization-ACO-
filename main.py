@@ -13,21 +13,47 @@ GRAY = (65, 65, 65)
 
 # Define the axiom and production rules
 axiom = "X"
-rules = {
+
+rules_grid = {
     "X": [
         "F[+X]F[-X]FX",
         "F[+X]F[-X]+X",
         "F-[[X]+X]+F[+FX]-X",
         "F[X]F[+X]+F[-X]X",
-        "F[+X][-X]F+F[X]+F[+FX]-X",  # New rule for curved paths
-        "FF[+X][+X]FF[-X][-X]",  # New rule for intersections
-        "F[X]+[X]+F-F",  # New rule for branching paths
-        "FX+F+FX-F-F"  # New rule for creating loops
+        "F[+X][-X]F+F[X]+F[+FX]-X",  # Curved paths
+        "F[X]+[X]+F-F",  # Branching paths
+        "FX+F+FX-F-F",  # Loops
     ],
     "F": [
         "FF",
         "F[+F]F[-F]F",
-        "F[+FF][-FF]F"  # New rule for curved paths
+        "F[+FF][-FF]F",  # Curved paths
+    ],
+}
+
+rules_hexagonal = {
+    "X": [
+        "F[++X]F[--X]+X",  # Sharp curves for 60 degrees
+        "F[X+F-X]F[+X-]-X",  # Complex branching with 60 degrees
+        "F[+F[X]]F[-F[X]]X",  # Nested branching with 60 degrees
+        "F[+X]F[-X]FX",  # Common pattern adapted for hexagonal layout
+    ],
+    "F": [
+        "F[+F]F[-F]F",
+        "F[+F-F-F]F[-F+F+F]",  # Hexagonal paths
+    ],
+}
+
+rules_triangular = {
+    "X": [
+        "F[+X]F[-X]FX",
+        "F[X]F[+X]+F[-X]X",
+        "F[+X][-X]F+F[X]+F[+FX]-X",  # Curved paths
+        "F[X+F-X]F[+X-]-X",  # Complex branching with 120 degrees
+    ],
+    "F": [
+        "F[+F]F[-F]F",
+        "F[-F+F+F]-[+F-F-F]",  # Triangular paths
     ],
 }
 
@@ -187,22 +213,22 @@ def connect_dead_end_nodes(nodes, edges, surface):
                 existing_edges.add((nodes[dead_end_node_index], nodes[closest_node_index]))
                 existing_edges.add((nodes[closest_node_index], nodes[dead_end_node_index]))
 
-
 #---------------------------------------------------- Functions: Creating L-System City  -----------------------------------------------------------
 
 # Define the function to draw the l-system
 def draw_lsystem(sequence, step_size, surface):
+    global angle
     stack = []  # Storage of the current direction and angle of the turtle to remember when backtracking
     nodes = []  # Storage of the nodes (each move forward represents 1 node)
     edges = []
     x, y = surface.get_width() // 2, surface.get_height() // 2
-    angle = 90 # Start facing up
+    current_angle = angle
 
     for char in sequence:
 
         if char == "F":  # Move forward
-            dx = step_size * math.cos(angle * math.pi / 180)
-            dy = step_size * math.sin(angle * math.pi / 180)
+            dx = step_size * math.cos(current_angle * math.pi / 180)
+            dy = step_size * math.sin(current_angle * math.pi / 180)
             new_x, new_y = x + dx, y + dy
 
             # Draw a thicker line for the road
@@ -213,13 +239,13 @@ def draw_lsystem(sequence, step_size, surface):
             x, y = new_x, new_y
 
         elif char == "+":  # Rotate turtle 90 degrees right
-            angle += 90
+            current_angle += angle
         elif char == "-":  # Rotate turtle 90 degrees left
-            angle -= 90
+            current_angle -= angle
         elif char == "[":  # Push current position and angle onto the stack (start of a new branch)
-            stack.append((x, y, angle))
+            stack.append((x, y, current_angle))
         elif char == "]":  # Pop position and angle from the stack (return to the previous branch)
-            x, y, angle = stack.pop()
+            x, y, current_angle = stack.pop()
 
     return nodes, edges
 
@@ -330,9 +356,11 @@ pygame.display.set_caption("City Road Gen")
 clock = pygame.time.Clock()
 
 segments = 0
+angle = 90
 
 # Prompt the user for the number of segments
 #segments = int(input("Enter the number of segments (F) for the L-system: "))
+#angle = int(input("Enter the angle (60, 90, 120): "))
 
 def landing_page():
     try:
@@ -439,6 +467,7 @@ def generate_city_page():
 
 def main():
     #----------------------------------------------------Generate City-----------------------------------------------------------
+
     global scroll_x, scroll_y
 
     # Create a larger surface for drawing
@@ -450,6 +479,14 @@ def main():
     # Set initial scroll position to center the screen on the surface
     scroll_x = (surface_width - screen_width) // 2
     scroll_y = (surface_height - screen_height) // 2
+
+    if angle == 90:
+        rules = rules_grid
+    elif angle == 60:
+        rules = rules_hexagonal
+    elif angle == 120:
+        rules = rules_triangular
+    else: rules = rules_grid
 
     # Generate the L-system and draw the city on the larger surface
     sequence = generate_lsystem(axiom, rules, segments)
