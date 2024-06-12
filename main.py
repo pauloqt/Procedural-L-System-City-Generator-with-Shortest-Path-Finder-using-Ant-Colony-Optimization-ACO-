@@ -2,17 +2,23 @@ import pygame
 import random
 import math
 import heapq
+import shapely.geometry as geo
+import shapely.ops as ops
+from shapely.affinity import translate
 
 # Define colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
-GREEN = (1, 50, 32)
+GREEN = (93, 168, 65)
+GRAY = (65, 65, 65)
+BLUE = (61, 114, 40)
 
 # Define the axiom and production rules
 axiom = "X"
-rules = {
+
+rules_grid = {
     "X": [
         "F[+X]F[-X]FX",
         "F[+X]F[-X]+X",
@@ -20,7 +26,8 @@ rules = {
         "F[X]F[+X]+F[-X]X",
         "F[+X][-X]F+F[X]+F[+FX]-X",  # New rule for curved paths
         "FF[+X][+X]FF[-X][-X]",  # New rule for intersections
-        "F[X]+[X]+F-F"  # New rule for branching paths
+        "F[X]+[X]+F-F",  # New rule for branching paths
+        "FX+F+FX-F-F"  # New rule for creating loops
     ],
     "F": [
         "FF",
@@ -29,48 +36,261 @@ rules = {
     ],
 }
 
+rules_hexagonal = {
+    "X": [
+        "F[++X]F[--X]+X",  # Sharp curves for 60 degrees
+        "F[X+F-X]F[+X-]-X",  # Complex branching with 60 degrees
+        "F[+F[X]]F[-F[X]]X",  # Nested branching with 60 degrees
+        "F[+X]F[-X]FX",  # Common pattern adapted for hexagonal layout
+    ],
+    "F": [
+        "F[+F]F[-F]F",
+        "F[+F-F-F]F[-F+F+F]",  # Hexagonal paths
+    ],
+}
+
+rules_triangular = {
+    "X": [
+        "F[+X]F[-X]FX",
+        "F[X]F[+X]+F[-X]X",
+        "F[+X][-X]F+F[X]+F[+FX]-X",  # Curved paths
+        "F[X+F-X]F[+X-]-X",  # Complex branching with 120 degrees
+    ],
+    "F": [
+        "F[+F]F[-F]F",
+        "F[-F+F+F]-[+F-F-F]",  # Triangular paths
+    ],
+}
+
+#---------------------------------------------------- Functions: Creating Buildings -----------------------------------------------------------
+def calculate_polygon_area(polygon):
+    """
+    Helper function to calculate the area of a polygon.
+    Implements the Shoelace formula.
+    """
+    area = 0
+    for i in range(len(polygon)):
+        j = (i + 1) % len(polygon)
+        area += polygon[i][0] * polygon[j][1]
+        area -= polygon[j][0] * polygon[i][1]
+    area = abs(area) / 2
+    return area
+
+def point_in_polygon(point, polygon):
+    """
+    Helper function to determine if a point is inside a polygon.
+    Implements the ray-casting algorithm.
+    """
+    x, y = point
+    n = len(polygon)
+    inside = False
+    p1x, p1y = polygon[0]
+    for i in range(n + 1):
+        p2x, p2y = polygon[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+    return inside
+
+def draw_buildings(surface, nodes, edges):
+    polygons = []
+    current_polygon = []
+
+    for i, edge in enumerate(edges):
+        start, end = edge
+        current_polygon.append(start)
+        if i == len(edges) - 1 or end != edges[(i + 1) % len(edges)][0]:
+            current_polygon.append(end)
+            if len(current_polygon) >= 3:  # Ensure we have a valid polygon
+                polygons.append(current_polygon)
+            current_polygon = [end]
+
+    for polygon in polygons:
+        area = calculate_polygon_area(polygon)
+        if area > 0:
+            building_size = int(math.sqrt(area) * 0.2)  # Scale down building size to fit within the polygon
+
+            # Compute the bounding box for the polygon and convert to integers
+            min_x = int(min(p[0] for p in polygon))
+            max_x = int(max(p[0] for p in polygon))
+            min_y = int(min(p[1] for p in polygon))
+            max_y = int(max(p[1] for p in polygon))
+
+            attempts = 0
+            while attempts < 100:  # Try up to 100 times to find a valid position
+                building_x = random.randint(min_x, max_x - building_size)
+                building_y = random.randint(min_y, max_y - building_size)
+                building_rect = pygame.Rect(building_x, building_y, building_size, building_size)
+
+                overlaps = False
+                for edge in edges:
+                    if building_rect.clipline(edge):
+                        overlaps = True
+                        break
+
+                if not overlaps and point_in_polygon((building_rect.centerx, building_rect.centery), polygon):
+                    pygame.draw.rect(surface, BLUE, building_rect)
+                    break  # Building successfully placed
+                attempts += 1
+
+#---------------------------------------------------- Functions: Connecting Dead End Nodes  -----------------------------------------------------------
+def connect_dead_end_nodes(nodes, edges, surface):
+    # Create a set of all nodes
+    all_nodes = set(nodes)
+
+    # Create a dictionary to store the connected nodes for each node
+    connected_nodes = {node: set() for node in all_nodes}
+
+    # Populate the connected_nodes dictionary
+    for edge in edges:
+        start, end = edge
+        if start in all_nodes and end in all_nodes:
+            connected_nodes[start].add(end)
+            connected_nodes[end].add(start)
+
+    # Create a set of existing edges to quickly check for redundancy
+    existing_edges = set(edges)
+
+    while True:
+        # Find the dead-end nodes (nodes with only one connected node)
+        dead_end_nodes = [node for node, connected in connected_nodes.items() if len(connected) == 1]
+
+        if not dead_end_nodes:
+            break  # Exit the loop if no more dead-end nodes are found
+
+        for dead_end_node in dead_end_nodes:
+            closest_node = None
+            min_distance = float("inf")
+
+            # Get the set of connected nodes for the current dead-end node
+            connected_nodes_for_dead_end = connected_nodes[dead_end_node]
+
+            # Iterate over all nodes that are not the dead-end node itself and not already connected to the dead-end node
+            for node in all_nodes - {dead_end_node} - connected_nodes_for_dead_end:
+                dead_end_node_index = nodes.index(dead_end_node)
+                node_index = nodes.index(node)
+
+                # Check if the nodes are aligned horizontally or vertically
+                if dead_end_node[0] == node[0] or dead_end_node[1] == node[1]:
+                    distance = math.sqrt((nodes[dead_end_node_index][0] - nodes[node_index][0]) ** 2 + (
+                            nodes[dead_end_node_index][1] - nodes[node_index][1]) ** 2)
+
+                    # Check if the edge is not already existing
+                    if (nodes[dead_end_node_index], nodes[node_index]) not in existing_edges and (
+                            nodes[node_index], nodes[dead_end_node_index]) not in existing_edges:
+                        if distance < min_distance:
+                            closest_node = node
+                            min_distance = distance
+
+            if closest_node is not None:
+                dead_end_node_index = nodes.index(dead_end_node)
+                closest_node_index = nodes.index(closest_node)
+
+                # Calculate the step size
+                step_size = 20
+
+                # Calculate the number of steps required to reach the closest node
+                num_steps = int(min_distance / step_size)
+
+                # Calculate the step increments in x and y directions
+                step_x = (closest_node[0] - dead_end_node[0]) / num_steps
+                step_y = (closest_node[1] - dead_end_node[1]) / num_steps
+
+                # Draw line segments representing each step and add new nodes to the list
+                for i in range(num_steps):
+                    start_point = (int(dead_end_node[0] + i * step_x), int(dead_end_node[1] + i * step_y))
+                    end_point = (int(dead_end_node[0] + (i + 1) * step_x), int(dead_end_node[1] + (i + 1) * step_y))
+                    pygame.draw.line(surface, GRAY, start_point, end_point, 7)
+                    edges.append((start_point, end_point))
+
+                    # Add the new node to the nodes list
+                    new_node = (int(dead_end_node[0] + (i + 1) * step_x), int(dead_end_node[1] + (i + 1) * step_y))
+                    nodes.append(new_node)
+
+                # Add the nodes to the connected nodes dictionary
+                connected_nodes[dead_end_node].add(closest_node)
+                connected_nodes[closest_node].add(dead_end_node)
+                existing_edges.add((nodes[dead_end_node_index], nodes[closest_node_index]))
+                existing_edges.add((nodes[closest_node_index], nodes[dead_end_node_index]))
+
+#---------------------------------------------------- Functions: Creating L-System City  -----------------------------------------------------------
+
 # Define the function to draw the l-system
 def draw_lsystem(sequence, step_size, surface):
-    stack = [] # storage of the current direction and angle of the turtle para ma-remember kapag babalikan.
-    nodes = [] # storage of the nodes (each move forward represents 1 node)
+    global angle
+    stack = []  # Storage of the current direction and angle of the turtle to remember when backtracking
+    nodes = []  # Storage of the nodes (each move forward represents 1 node)
     edges = []
     x, y = surface.get_width() // 2, surface.get_height() // 2
-    angle = 90  # Start facing up
+    current_angle = angle
 
     for char in sequence:
-        if char == "F": # move forward
-            dx = step_size * math.cos(angle * math.pi / 180)
-            dy = step_size * math.sin(angle * math.pi / 180)
+
+        if char == "F":  # Move forward
+            dx = step_size * math.cos(current_angle * math.pi / 180)
+            dy = step_size * math.sin(current_angle * math.pi / 180)
             new_x, new_y = x + dx, y + dy
-            pygame.draw.line(surface, WHITE, (x, y), (new_x, new_y), 2)
-            pygame.draw.circle(surface, BLUE, (x, y), 2)
-            nodes.append((new_x, new_y)) # add the node to the node list
+
+            # Draw a thicker line for the road
+            pygame.draw.line(surface, GRAY, (x, y), (new_x, new_y), 7)  # Change the line thickness to 5
+
+            nodes.append((new_x, new_y))  # Add the node to the node list
             edges.append(((x, y), (new_x, new_y)))
             x, y = new_x, new_y
-        elif char == "+": # Rotate turtle 90 degrees right
-            angle += 90
-        elif char == "-": # Rotate turtle 90 degrees left
-            angle -= 90
-        elif char == "[": # Push current position and angle onto the stack ; This means, the turtle will start a new branch (start of a recursion). Ino-note niya para mabalikan
-            stack.append((x, y, angle))
-        elif char == "]": # Pop position and angle from the stack, para babalik siya sa first position ng branch
-            x, y, angle = stack.pop()
+
+        elif char == "+":  # Rotate turtle 90 degrees right
+            current_angle += angle
+        elif char == "-":  # Rotate turtle 90 degrees left
+            current_angle -= angle
+        elif char == "[":  # Push current position and angle onto the stack (start of a new branch)
+            stack.append((x, y, current_angle))
+        elif char == "]":  # Pop position and angle from the stack (return to the previous branch)
+            x, y, current_angle = stack.pop()
 
     return nodes, edges
 
 # Generate the string of L-system starting with the axiom
-def generate_lsystem(axiom, rules, iterations):
-    sequence = axiom # start the L-System sequence with the axiom
-    for _ in range(iterations): # loop kung ilan ang iteration
+def generate_lsystem(axiom, rules, max_segments):
+    sequence = axiom  # Start the L-System sequence with the axiom
+
+    while True:
         next_sequence = ""
-        for char in sequence: # mag-loop sa sequence
-            if char in rules: # if ang character na nasa sequence ay key sa prdouction rule (X or F), then mamili ng random rule sa key na yon.
+        for char in sequence:  # Loop through the sequence
+            if char in rules:  # Check if the character is a key in the production rules (X or F)
                 next_sequence += random.choice(rules[char])
-            else:             # if ang character ay hindi key, like ( +, -, [, ], then skip)
+            else:  # If the character is not a key, like ( +, -, [, ], then keep it as it is
                 next_sequence += char
+
         sequence = next_sequence
-        print(sequence)
+
+        # Count the total number of segments (F) in the sequence
+        total_segments = sequence.count('F')
+
+        if total_segments < max_segments:  # Continue looping until the total segments are less than max_segments
+            continue
+        else:
+            # Find the index of the max_segments-th occurrence of 'F' in the sequence
+            f_index = -1
+            segments_found = 0
+            for i, char in enumerate(sequence):
+                if char == 'F':
+                    segments_found += 1
+                    if segments_found == max_segments:
+                        f_index = i
+                        break
+
+            # Cut the sequence from the beginning to the index of the max_segments-th occurrence of 'F'
+            sequence = sequence[:f_index + 1]
+            break
+
+    print(sequence)
     return sequence
+#---------------------------------------------------- Functions: Creating Shortest Path -----------------------------------------------------------
 
 def heuristic(a, b): #returns the euclidean distance between 2 nodes
     return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
@@ -119,33 +339,226 @@ def astar(graph, start, end, nodes):
 
     return None
 
-# Prompt the user for the number of iterations
-iterations = int(input("Enter the number of iterations (1-10): "))
-
 #----------------------------------------------------Initialize Pygame-----------------------------------------------------------
 pygame.init()
-screen_width, screen_height = 1000, 800
+screen_width, screen_height = 1500, 700
 screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("L-System City Generator")
+
+button_width, button_height = 250, 50
+button_x, button_y = 610, 528
+
+closebutton_width, closebutton_height = 40, 50
+closebutton_x, closebutton_y = 1400, 20
+
+button_main_width, button_main_height = 119, 40
+button_main_x, button_main_y = 20, 257
+
+button_regenerate_width, button_regenerate_height = 119, 40
+button_regenerate_x, button_regenerate_y = 20, 307
+
+button_clear_width, button_clear_height = 119, 40
+button_clear_x, button_clear_y = 20, 356
+
+# Load the custom font
+pygame.font.init()
+font_path = 'assets/RoadRage.ttf'
+font_size = 39
+font = pygame.font.Font(font_path, font_size)
+text_color = (205, 162, 115)
+
+pygame.display.set_caption("City Road Gen")
 clock = pygame.time.Clock()
 
-# Create a larger surface for drawing
-surface_width, surface_height = 1500, 1500
-surface = pygame.Surface((surface_width, surface_height))
-surface.fill(GREEN)
+segments = 0
+angle = 0
 
-scroll_x, scroll_y = 0, 0
-# Set initial scroll position to center the screen on the surface
-scroll_x = (surface_width - screen_width) // 2
-scroll_y = (surface_height - screen_height) // 2
+def landing_page():
+    try:
+        landing_image = pygame.image.load('assets/Landing_page.png')
+        landing_image = pygame.transform.scale(landing_image, (screen_width, screen_height))
+
+        button_image = pygame.image.load('assets/Get_started.png')
+        button_image = pygame.transform.scale(button_image, (button_width, button_height))
+
+    except pygame.error as e:
+        print("Error loading image:", e)
+        return
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if button_x <= mouse_pos[0] <= button_x + button_width and \
+                        button_y <= mouse_pos[1] <= button_y + button_height:
+                    print("Button Clicked!")
+                    generate_city_page()
+                    return
+
+        screen.blit(landing_image, (0, 0))
+        screen.blit(button_image, (button_x, button_y))
+        pygame.display.flip()
+
+def generate_city_page():
+    global segments
+    global angle
+    pygame.display.set_caption("City Road Gen")
+    input_text = ""
+    input_angle = ""
+    input_active = None  # Track which input field is active
+    cursor_visible = True
+    cursor_blink_time = 500
+    last_blink_time = pygame.time.get_ticks()
+
+    try:
+        image = pygame.image.load('assets/Home.png')
+        image = pygame.transform.scale(image, (screen_width, screen_height))
+
+        button = pygame.image.load('assets/Generate.png')
+        button = pygame.transform.scale(button, (button_width, button_height))
+
+        close_button = pygame.image.load('assets/Close.png')
+        close_button = pygame.transform.scale(close_button, (closebutton_width, closebutton_height))
+
+    except pygame.error as e:
+        print("Error loading image:", e)
+        return
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if button_x <= mouse_pos[0] <= button_x + button_width and button_y <= mouse_pos[
+                    1] <= button_y + button_height:
+                    print("Generate Button Clicked!")
+                    if len(input_text) < 2 or len(input_angle) < 2:
+                        print("Please enter both segments and angle.")
+                        continue
+                    segments = int(input_text)
+                    angle = int(input_angle)
+                    # Check if angle is valid (90, 60, or 120)
+                    if angle not in (90, 60, 120):
+                        print("Invalid angle. Angle must be 90, 60, or 120.")
+                        continue
+                    main()
+                elif closebutton_x <= mouse_pos[0] <= closebutton_x + closebutton_width and \
+                        closebutton_y <= mouse_pos[1] <= closebutton_y + closebutton_height:
+                    print("Close Button Clicked!")
+                    landing_page()
+                    return
+                else:
+                    # Check which input field was clicked
+                    input_active = None
+                    if 957 <= mouse_pos[0] <= 957 + 150 and 404 <= mouse_pos[1] <= 404 + 40:
+                        input_active = "segments"
+                    elif 892 <= mouse_pos[0] <= 892 + 150 and 457 <= mouse_pos[1] <= 457 + 40:
+                        input_active = "angle"
+
+            if event.type == pygame.KEYDOWN and input_active:
+                if event.key == pygame.K_RETURN:
+                    input_text = ""
+                    input_angle = ""
+                elif event.key == pygame.K_BACKSPACE:
+                    if input_active == "segments":
+                        input_text = input_text[:-1]
+                    elif input_active == "angle":
+                        input_angle = input_angle[:-1]
+                else:
+                    if input_active == "segments":
+                        input_text += event.unicode
+                    elif input_active == "angle":
+                        input_angle += event.unicode
+
+        screen.blit(image, (0, 0))
+        screen.blit(button, (button_x, button_y))
+        screen.blit(close_button, (closebutton_x, closebutton_y))
+
+        # Render text input for segments at specified position
+        input_surface_segments = font.render(input_text, True, text_color)
+        screen.blit(input_surface_segments, (957, 404))
+
+        # Render text input for angle at specified position
+        input_surface_angle = font.render(input_angle, True, text_color)
+        screen.blit(input_surface_angle, (893, 457))
+
+        # Handle cursor blinking
+        current_time = pygame.time.get_ticks()
+        if current_time - last_blink_time > cursor_blink_time:
+            cursor_visible = not cursor_visible
+            last_blink_time = current_time
+
+        # Render cursor if input is active and cursor is visible for segments
+        if input_active == "segments" and cursor_visible:
+            cursor = font.render("|", True, text_color)
+            cursor_x = 956 + input_surface_segments.get_width() + 2
+            screen.blit(cursor, (cursor_x, 404))
+
+        # Render cursor if input is active and cursor is visible for angle
+        if input_active == "angle" and cursor_visible:
+            cursor = font.render("|", True, text_color)
+            cursor_x = 892 + input_surface_angle.get_width() + 2
+            screen.blit(cursor, (cursor_x, 457))
+
+        pygame.display.flip()
+
+
 
 def main():
-    #----------------------------------------------------Generate City-----------------------------------------------------------
     global scroll_x, scroll_y
 
+    try:
+        generate_btn = pygame.image.load('assets/generate-main.png')
+        generate_btn = pygame.transform.scale(generate_btn, (button_main_width, button_main_height))
+
+        regenerate_btn = pygame.image.load('assets/regenerate-main.png')
+        regenerate_btn = pygame.transform.scale(regenerate_btn, (button_regenerate_width, button_regenerate_height))
+
+        clear_btn = pygame.image.load('assets/clear-main.png')
+        clear_btn = pygame.transform.scale(clear_btn, (button_clear_width, button_clear_height))
+
+    except pygame.error as e:
+        print("Error loading image:", e)
+        return
+
+    # Create a larger surface for drawing
+    surface_width, surface_height = 3000, 3000
+    surface = pygame.Surface((surface_width, surface_height))
+    surface.fill(GREEN)
+
+    scroll_x, scroll_y = 0, 0
+    # Set initial scroll position to center the screen on the surface
+    scroll_x = (surface_width - screen_width) // 2
+    scroll_y = (surface_height - screen_height) // 2
+
+    if angle == 90:
+        rules = rules_grid
+    elif angle == 60:
+        rules = rules_hexagonal
+    elif angle == 120:
+        rules = rules_triangular
+    else:
+        rules = rules_grid
+
     # Generate the L-system and draw the city on the larger surface
-    sequence = generate_lsystem(axiom, rules, iterations)
-    nodes, edges = draw_lsystem(sequence, step_size=15, surface=surface)
+    sequence = generate_lsystem(axiom, rules, segments)
+    nodes, edges = draw_lsystem(sequence, step_size=21, surface=surface)
+
+    # Connect the dead-end nodes
+    connect_dead_end_nodes(nodes, edges, surface)
+
+    # Add white markers at the nodes' coordinates
+    for node in nodes:
+        pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 1.5, 1.5))
+
+    # Draw buildings or houses
+    draw_buildings(surface, nodes, edges)
 
     #----------------------------------------------------Initialize Shortest Path-----------------------------------------------------------
     # Create adjacency list - a graph where naka-list lahat ng nodes and its neighboring/adjacent nodes and its euclidean distance to that node.
@@ -164,9 +577,8 @@ def main():
     # Variables for start and end nodes
     start_node = None
     end_node = None
-
-    loop_start_node = None
     running = True
+    current_color = None
 
     while running:
         clock.tick(60)  # Limit the frame rate
@@ -174,7 +586,41 @@ def main():
         for event in pygame.event.get(): # mag-loop sa event/action ni user (e.g. clicks, close window)
             if event.type == pygame.QUIT:
                 running = False
+
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+
+                # Check for button clicks first
+                # Generate city with new parameter
+                if button_main_x <= mouse_pos[0] <= button_main_x + button_main_width and \
+                        button_main_y <= mouse_pos[1] <= button_main_y + button_main_height:
+                    print("Generate Button Clicked!")
+                    generate_city_page()
+                    continue  # Skip the rest of the loop to avoid checking for node clicks
+
+                # Regenerate city with the same parameter
+                if button_regenerate_x <= mouse_pos[0] <= button_regenerate_x + button_regenerate_width and \
+                        button_regenerate_y <= mouse_pos[1] <= button_regenerate_y + button_regenerate_height:
+                    print("Re-generate Button Clicked!")
+                    main()
+                    continue
+
+                # Create New Slate of the Current City
+                if button_clear_x <= mouse_pos[0] <= button_clear_x + button_clear_width and \
+                        button_clear_y <= mouse_pos[1] <= button_clear_y + button_clear_height:
+                    print("Clear Button Clicked!")
+                    surface.fill(GREEN)
+                    start_node = None
+                    end_node = None
+                    current_color = None
+                    nodes, edges = draw_lsystem(sequence, step_size=21, surface=surface)
+                    connect_dead_end_nodes(nodes, edges, surface)
+                    for node in nodes:
+                        pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 1.5, 1.5))
+                    draw_buildings(surface, nodes, edges)
+                    continue
+
+                # If no button was clicked, check for node clicks
                 print("clicked")
                 mouse_x = event.pos[0] + scroll_x
                 mouse_y = event.pos[1] + scroll_y
@@ -183,34 +629,39 @@ def main():
                     if distance < 10:  # radius kung gaano dapat kalapit ang click para ma-detect kung saang node siya
                         if start_node is None:
                             start_node = i
-                            pygame.draw.circle(surface, RED, (x, y), 5)
+                            current_color = (
+                            random.randint(128, 255), random.randint(128, 255), random.randint(128, 255))
+                            pygame.draw.circle(surface, current_color, (x, y), 5)
                             print("Click the end node")
                         elif end_node is None and i != start_node:  # Check if the clicked node is not the same as the start node
                             end_node = i
-                            pygame.draw.circle(surface, RED, (x, y), 5)
+                            pygame.draw.circle(surface, current_color, (x, y), 5)
                             print(f"Shortest path from node {start_node} to node {end_node}")
 
                             # Run A* to find the shortest path
                             shortest_path = astar(graph, start_node, end_node, nodes)
                             if shortest_path:
                                 print("Shortest path found:", shortest_path)
-                                for node in range(len(shortest_path) - 1): #Loop to draw line from current node to next node until all the nodes in shortest path is drawn
+                                for node in range(
+                                        len(shortest_path) - 1):  # Loop to draw line from current node to next node until all the nodes in shortest path is drawn
                                     node_a = nodes[shortest_path[node]]
                                     node_b = nodes[shortest_path[node + 1]]
-                                    pygame.draw.line(surface, RED, node_a, node_b, 2)
+                                    pygame.draw.line(surface, current_color, node_a, node_b, 2)
 
                             # Reset start_node and end_node to None for the next selection
                             start_node = None
                             end_node = None
 
+
+
                         else:
                             print("Start and end nodes cannot be the same. Please click another node for the end node.")
                         break
 
-
             elif event.type == pygame.MOUSEWHEEL:
                 scroll_x += event.x * 50
                 scroll_y += event.y * 50
+
                 # Clamp scroll_x and scroll_y within the bounds of the surface
                 scroll_x = max(min(scroll_x, surface_width - screen_width), 0)
                 scroll_y = max(min(scroll_y, surface_height - screen_height), 0)
@@ -220,9 +671,14 @@ def main():
         surface_sub = surface.subsurface(screen_rect)
         scaled_surface = pygame.transform.scale(surface_sub, (screen_width, screen_height))
         screen.blit(scaled_surface, (0, 0))
+        screen.blit(generate_btn, (button_main_x, button_main_y))
+        screen.blit(regenerate_btn, (button_regenerate_x, button_regenerate_y))
+        screen.blit(clear_btn, (button_clear_x, button_clear_y))
 
         pygame.display.flip()
 
     pygame.quit()
 
+landing_page()
+generate_city_page()
 main()
