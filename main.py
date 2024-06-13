@@ -229,7 +229,7 @@ def draw_lsystem(sequence, step_size, surface):
     stack = []  # Storage of the current direction and angle of the turtle to remember when backtracking
     nodes = []  # Storage of the nodes (each move forward represents 1 node)
     edges = []
-    x, y = surface.get_width() // 2, surface.get_height() // 2
+    x, y = surface.get_width() // 2, surface.get_height() // 2.3
     current_angle = angle
 
     for char in sequence:
