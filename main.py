@@ -51,6 +51,7 @@ rules_hexagonal = {
 
 rules_triangular = {
     "X": [
+        "F"
         "F[+X]F[-X]FX",
         "F[X]F[+X]+F[-X]X",
         "F[+X][-X]F+F[X]+F[+FX]-X",  # Curved paths
@@ -220,7 +221,6 @@ def connect_dead_end_nodes(nodes, edges, surface):
                 connected_nodes[closest_node].add(dead_end_node)
                 existing_edges.add((nodes[dead_end_node_index], nodes[closest_node_index]))
                 existing_edges.add((nodes[closest_node_index], nodes[dead_end_node_index]))
-
 #---------------------------------------------------- Functions: Creating L-System City  -----------------------------------------------------------
 
 # Define the function to draw the l-system
@@ -229,7 +229,11 @@ def draw_lsystem(sequence, step_size, surface):
     stack = []  # Storage of the current direction and angle of the turtle to remember when backtracking
     nodes = []  # Storage of the nodes (each move forward represents 1 node)
     edges = []
-    x, y = surface.get_width() // 2, surface.get_height() // 2.3
+    if angle == 120:
+        height = 2
+    else: height = 2.3
+
+    x, y = surface.get_width() // 2, surface.get_height() // height
     current_angle = angle
 
     for char in sequence:
@@ -397,7 +401,6 @@ def landing_page():
                 mouse_pos = pygame.mouse.get_pos()
                 if button_x <= mouse_pos[0] <= button_x + button_width and \
                         button_y <= mouse_pos[1] <= button_y + button_height:
-                    print("Button Clicked!")
                     generate_city_page()
                     return
 
@@ -440,7 +443,6 @@ def generate_city_page():
                 mouse_pos = pygame.mouse.get_pos()
                 if button_x <= mouse_pos[0] <= button_x + button_width and button_y <= mouse_pos[
                     1] <= button_y + button_height:
-                    print("Generate Button Clicked!")
                     if len(input_text) < 2 or len(input_angle) < 2:
                         print("Please enter both segments and angle.")
                         continue
@@ -531,7 +533,7 @@ def main():
         return
 
     # Create a larger surface for drawing
-    surface_width, surface_height = 5000, 5000
+    surface_width, surface_height = 4000, 4000
     surface = pygame.Surface((surface_width, surface_height))
     surface.fill(GREEN)
 
@@ -621,7 +623,6 @@ def main():
                     continue
 
                 # If no button was clicked, check for node clicks
-                print("clicked")
                 mouse_x = event.pos[0] + scroll_x
                 mouse_y = event.pos[1] + scroll_y
                 for i, (x, y) in enumerate(nodes):  # Loop through all nodes to find the one closest to the mouse click.
@@ -647,12 +648,11 @@ def main():
                                     node_a = nodes[shortest_path[node]]
                                     node_b = nodes[shortest_path[node + 1]]
                                     pygame.draw.line(surface, current_color, node_a, node_b, 2)
+                                print("Number of segments of shortest path: ", (len(shortest_path)-1))
 
                             # Reset start_node and end_node to None for the next selection
                             start_node = None
                             end_node = None
-
-
 
                         else:
                             print("Start and end nodes cannot be the same. Please click another node for the end node.")
