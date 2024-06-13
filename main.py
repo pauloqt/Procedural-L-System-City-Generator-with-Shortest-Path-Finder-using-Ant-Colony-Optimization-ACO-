@@ -192,10 +192,13 @@ def connect_dead_end_nodes(nodes, edges, surface):
                 closest_node_index = nodes.index(closest_node)
 
                 # Calculate the step size
-                step_size = 20
+                step_size = 21
 
-                # Calculate the number of steps required to reach the closest node
-                num_steps = int(min_distance / step_size)
+                # Calculate the total distance
+                total_distance = math.sqrt((closest_node[0] - dead_end_node[0])**2 + (closest_node[1] - dead_end_node[1])**2)
+
+                # Ensure at least one step
+                num_steps = max(1, int(total_distance / step_size))
 
                 # Calculate the step increments in x and y directions
                 step_x = (closest_node[0] - dead_end_node[0]) / num_steps
@@ -528,7 +531,7 @@ def main():
         return
 
     # Create a larger surface for drawing
-    surface_width, surface_height = 3000, 3000
+    surface_width, surface_height = 5000, 5000
     surface = pygame.Surface((surface_width, surface_height))
     surface.fill(GREEN)
 
@@ -587,28 +590,25 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_pos = pygame.mouse.get_pos()
 
                 # Check for button clicks first
                 # Generate city with new parameter
                 if button_main_x <= mouse_pos[0] <= button_main_x + button_main_width and \
                         button_main_y <= mouse_pos[1] <= button_main_y + button_main_height:
-                    print("Generate Button Clicked!")
                     generate_city_page()
                     continue  # Skip the rest of the loop to avoid checking for node clicks
 
                 # Regenerate city with the same parameter
                 if button_regenerate_x <= mouse_pos[0] <= button_regenerate_x + button_regenerate_width and \
                         button_regenerate_y <= mouse_pos[1] <= button_regenerate_y + button_regenerate_height:
-                    print("Re-generate Button Clicked!")
                     main()
                     continue
 
                 # Create New Slate of the Current City
                 if button_clear_x <= mouse_pos[0] <= button_clear_x + button_clear_width and \
                         button_clear_y <= mouse_pos[1] <= button_clear_y + button_clear_height:
-                    print("Clear Button Clicked!")
                     surface.fill(GREEN)
                     start_node = None
                     end_node = None
