@@ -219,30 +219,39 @@ def connect_dead_end_nodes_angle(nodes, edges, surface):
 
 
 def connect_dead_end_nodes(nodes, edges, surface):
+    # Create a set of all nodes for quick lookup and a mapping from nodes to their indices
     all_nodes = set(nodes)
     node_index_map = {node: i for i, node in enumerate(nodes)}
+
+    # Create a dictionary to keep track of connections for each node
     connected_nodes = {node: set() for node in all_nodes}
+
+    # Create a set of existing edges for quick lookup
     existing_edges = set(edges)
 
+    # Populate the connected_nodes dictionary based on the existing edges
     for start, end in edges:
         if start in all_nodes and end in all_nodes:
             connected_nodes[start].add(end)
             connected_nodes[end].add(start)
 
-    max_distance = math.hypot(surface.get_width(), surface.get_height())  # Maximum possible distance
-    step_size = 21
+    # Calculate the maximum possible distance on the surface
+    max_distance = math.hypot(surface.get_width(), surface.get_height())
+    step_size = 21  # Step size for drawing lines
 
+    # Identify leaf nodes (nodes with only one connection)
     leaf_nodes = [node for node, connected in connected_nodes.items() if len(connected) == 1]
 
+    # Process each leaf node to connect it to other nodes
     for leaf_node in leaf_nodes:
         new_connections = []
         min_total_distance = float('inf')
 
         # Find the three shortest paths to other nodes
         for node in all_nodes - {leaf_node} - connected_nodes[leaf_node]:
-            # First, try to find a straight path
+            # Try to find a straight path between the leaf node and the current node
             if (leaf_node[0] == node[0] or leaf_node[1] == node[1]) and \
-               (leaf_node, node) not in existing_edges and (node, leaf_node) not in existing_edges:
+                    (leaf_node, node) not in existing_edges and (node, leaf_node) not in existing_edges:
                 total_distance = math.hypot(node[0] - leaf_node[0], node[1] - leaf_node[1])
                 new_connections.append(([leaf_node, node], total_distance))
 
@@ -252,7 +261,7 @@ def connect_dead_end_nodes(nodes, edges, surface):
                 turn_point2 = (node[0], leaf_node[1])
                 for turn_point in [turn_point1, turn_point2]:
                     if turn_point not in all_nodes and \
-                       (leaf_node, turn_point) not in existing_edges and (turn_point, node) not in existing_edges:
+                            (leaf_node, turn_point) not in existing_edges and (turn_point, node) not in existing_edges:
                         dist1 = math.hypot(turn_point[0] - leaf_node[0], turn_point[1] - leaf_node[1])
                         dist2 = math.hypot(node[0] - turn_point[0], node[1] - turn_point[1])
                         total_distance = dist1 + dist2
@@ -266,7 +275,7 @@ def connect_dead_end_nodes(nodes, edges, surface):
         if len(new_connections) > 1:
             for best_path, _ in new_connections:
                 for i in range(len(best_path) - 1):
-                    start_node, end_node = best_path[i], best_path[i+1]
+                    start_node, end_node = best_path[i], best_path[i + 1]
                     dx, dy = end_node[0] - start_node[0], end_node[1] - start_node[1]
                     distance = math.hypot(dx, dy)
                     num_steps = max(1, int(distance / step_size))
