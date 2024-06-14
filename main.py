@@ -113,7 +113,7 @@ def draw_buildings(surface, nodes, edges):
 
     for polygon in polygons:
         area = calculate_polygon_area(polygon)
-        if area > 0:
+        if area > 100:  # Only process polygons with a minimum area
             building_size = int(math.sqrt(area) * 0.2)  # Scale down building size to fit within the polygon
 
             # Compute the bounding box for the polygon and convert to integers
@@ -121,6 +121,14 @@ def draw_buildings(surface, nodes, edges):
             max_x = int(max(p[0] for p in polygon))
             min_y = int(min(p[1] for p in polygon))
             max_y = int(max(p[1] for p in polygon))
+
+            # Check if the polygon is too thin
+            if min_x == max_x or min_y == max_y:
+                continue  # Skip this polygon
+
+            # Ensure there's enough space for a building
+            if max_x - min_x < building_size or max_y - min_y < building_size:
+                continue  # Skip this polygon
 
             attempts = 0
             while attempts < 100:  # Try up to 100 times to find a valid position
@@ -140,9 +148,10 @@ def draw_buildings(surface, nodes, edges):
                 attempts += 1
 
 #---------------------------------------------------- Functions: Connecting Dead End Nodes  -----------------------------------------------------------
-def connect_dead_end_nodes(nodes, edges, surface):
-    # Create a set of all nodes
+def connect_dead_end_nodes_angle(nodes, edges, surface):
+    # Create a set of all nodes and existing edges for quick lookup
     all_nodes = set(nodes)
+    existing_edges = set(edges)
 
     # Create a dictionary to store the connected nodes for each node
     connected_nodes = {node: set() for node in all_nodes}
@@ -154,73 +163,170 @@ def connect_dead_end_nodes(nodes, edges, surface):
             connected_nodes[start].add(end)
             connected_nodes[end].add(start)
 
-    # Create a set of existing edges to quickly check for redundancy
-    existing_edges = set(edges)
+    max_iterations = len(nodes) * 2
+    iterations = 0
 
-    while True:
-        # Find the dead-end nodes (nodes with only one connected node)
+    while iterations < max_iterations:
+        iterations += 1
         dead_end_nodes = [node for node, connected in connected_nodes.items() if len(connected) == 1]
 
         if not dead_end_nodes:
-            break  # Exit the loop if no more dead-end nodes are found
+            break
 
         for dead_end_node in dead_end_nodes:
             closest_node = None
             min_distance = float("inf")
-
-            # Get the set of connected nodes for the current dead-end node
             connected_nodes_for_dead_end = connected_nodes[dead_end_node]
 
-            # Iterate over all nodes that are not the dead-end node itself and not already connected to the dead-end node
             for node in all_nodes - {dead_end_node} - connected_nodes_for_dead_end:
-                dead_end_node_index = nodes.index(dead_end_node)
-                node_index = nodes.index(node)
+                if (dead_end_node, node) not in existing_edges and (node, dead_end_node) not in existing_edges:
+                    distance = math.sqrt((dead_end_node[0] - node[0]) ** 2 + (dead_end_node[1] - node[1]) ** 2)
+                    if distance < min_distance:
+                        closest_node = node
+                        min_distance = distance
 
-                # Check if the nodes are aligned horizontally or vertically
-                if dead_end_node[0] == node[0] or dead_end_node[1] == node[1]:
-                    distance = math.sqrt((nodes[dead_end_node_index][0] - nodes[node_index][0]) ** 2 + (
-                            nodes[dead_end_node_index][1] - nodes[node_index][1]) ** 2)
-
-                    # Check if the edge is not already existing
-                    if (nodes[dead_end_node_index], nodes[node_index]) not in existing_edges and (
-                            nodes[node_index], nodes[dead_end_node_index]) not in existing_edges:
-                        if distance < min_distance:
-                            closest_node = node
-                            min_distance = distance
-
-            if closest_node is not None:
-                dead_end_node_index = nodes.index(dead_end_node)
-                closest_node_index = nodes.index(closest_node)
-
-                # Calculate the step size
+            if closest_node and min_distance < 200:
                 step_size = 21
-
-                # Calculate the total distance
                 total_distance = math.sqrt((closest_node[0] - dead_end_node[0])**2 + (closest_node[1] - dead_end_node[1])**2)
-
-                # Ensure at least one step
                 num_steps = max(1, int(total_distance / step_size))
-
-                # Calculate the step increments in x and y directions
                 step_x = (closest_node[0] - dead_end_node[0]) / num_steps
                 step_y = (closest_node[1] - dead_end_node[1]) / num_steps
 
-                # Draw line segments representing each step and add new nodes to the list
-                for i in range(num_steps):
-                    start_point = (int(dead_end_node[0] + i * step_x), int(dead_end_node[1] + i * step_y))
-                    end_point = (int(dead_end_node[0] + (i + 1) * step_x), int(dead_end_node[1] + (i + 1) * step_y))
-                    pygame.draw.line(surface, GRAY, start_point, end_point, 7)
-                    edges.append((start_point, end_point))
+                prev_point = dead_end_node
+                for i in range(1, num_steps + 1):
+                    current_point = (int(dead_end_node[0] + i * step_x), int(dead_end_node[1] + i * step_y))
+                    if (prev_point, current_point) not in existing_edges:
+                        pygame.draw.line(surface, GRAY, prev_point, current_point, 7)
+                        edges.append((prev_point, current_point))
+                        existing_edges.add((prev_point, current_point))
+                        existing_edges.add((current_point, prev_point))
+                        if current_point not in all_nodes:
+                            nodes.append(current_point)
+                            all_nodes.add(current_point)
+                            connected_nodes[current_point] = set()
+                        connected_nodes[prev_point].add(current_point)
+                        connected_nodes[current_point].add(prev_point)
+                        prev_point = current_point
 
-                    # Add the new node to the nodes list
-                    new_node = (int(dead_end_node[0] + (i + 1) * step_x), int(dead_end_node[1] + (i + 1) * step_y))
-                    nodes.append(new_node)
-
-                # Add the nodes to the connected nodes dictionary
                 connected_nodes[dead_end_node].add(closest_node)
                 connected_nodes[closest_node].add(dead_end_node)
-                existing_edges.add((nodes[dead_end_node_index], nodes[closest_node_index]))
-                existing_edges.add((nodes[closest_node_index], nodes[dead_end_node_index]))
+
+        # Break the loop if no new connections were made
+        if all(len(connected) > 1 for connected in connected_nodes.values()):
+            break
+
+    print(f"Dead-end node connection completed in {iterations} iterations.")
+
+
+def connect_dead_end_nodes(nodes, edges, surface):
+    all_nodes = set(nodes)
+    node_index_map = {node: i for i, node in enumerate(nodes)}
+    connected_nodes = {node: set() for node in all_nodes}
+    existing_edges = set(edges)
+
+    for start, end in edges:
+        if start in all_nodes and end in all_nodes:
+            connected_nodes[start].add(end)
+            connected_nodes[end].add(start)
+
+    max_distance = math.hypot(surface.get_width(), surface.get_height())  # Maximum possible distance
+    step_size = 21
+
+    leaf_nodes = [node for node, connected in connected_nodes.items() if len(connected) == 1]
+
+    for leaf_node in leaf_nodes:
+        new_connections = []
+        min_total_distance = float('inf')
+
+        # Find the three shortest paths to other nodes
+        for node in all_nodes - {leaf_node} - connected_nodes[leaf_node]:
+            # First, try to find a straight path
+            if (leaf_node[0] == node[0] or leaf_node[1] == node[1]) and \
+               (leaf_node, node) not in existing_edges and (node, leaf_node) not in existing_edges:
+                total_distance = math.hypot(node[0] - leaf_node[0], node[1] - leaf_node[1])
+                new_connections.append(([leaf_node, node], total_distance))
+
+            # If no straight path is found, try a path with one 90-degree turn
+            else:
+                turn_point1 = (leaf_node[0], node[1])
+                turn_point2 = (node[0], leaf_node[1])
+                for turn_point in [turn_point1, turn_point2]:
+                    if turn_point not in all_nodes and \
+                       (leaf_node, turn_point) not in existing_edges and (turn_point, node) not in existing_edges:
+                        dist1 = math.hypot(turn_point[0] - leaf_node[0], turn_point[1] - leaf_node[1])
+                        dist2 = math.hypot(node[0] - turn_point[0], node[1] - turn_point[1])
+                        total_distance = dist1 + dist2
+                        new_connections.append(([leaf_node, turn_point, node], total_distance))
+
+        # Sort the new connections by total distance and take the three shortest paths
+        new_connections.sort(key=lambda x: x[1])
+        new_connections = new_connections[:3]
+
+        # Check if more than one step is required to connect to three nodes
+        if len(new_connections) > 1:
+            for best_path, _ in new_connections:
+                for i in range(len(best_path) - 1):
+                    start_node, end_node = best_path[i], best_path[i+1]
+                    dx, dy = end_node[0] - start_node[0], end_node[1] - start_node[1]
+                    distance = math.hypot(dx, dy)
+                    num_steps = max(1, int(distance / step_size))
+                    step_x, step_y = dx / num_steps, dy / num_steps
+
+                    prev_point = start_node
+                    for step in range(1, num_steps + 1):
+                        new_point = (int(start_node[0] + step * step_x), int(start_node[1] + step * step_y))
+                        pygame.draw.line(surface, GRAY, prev_point, new_point, 7)
+                        if (prev_point, new_point) not in existing_edges:
+                            edges.append((prev_point, new_point))
+                            existing_edges.add((prev_point, new_point))
+                            existing_edges.add((new_point, prev_point))
+
+                        if new_point not in all_nodes:
+                            nodes.append(new_point)
+                            all_nodes.add(new_point)
+                            node_index_map[new_point] = len(nodes) - 1
+                            connected_nodes[new_point] = set()
+
+                        connected_nodes[prev_point].add(new_point)
+                        connected_nodes[new_point].add(prev_point)
+                        prev_point = new_point
+
+                # Connect the last two nodes in the path
+                connected_nodes[best_path[-2]].add(best_path[-1])
+                connected_nodes[best_path[-1]].add(best_path[-2])
+
+        # If only one step is required to connect to three nodes
+        else:
+            for best_path, _ in new_connections:
+                start_node, end_node = best_path[0], best_path[1]
+                dx, dy = end_node[0] - start_node[0], end_node[1] - start_node[1]
+                distance = math.hypot(dx, dy)
+                num_steps = max(1, int(distance / step_size))
+                step_x, step_y = dx / num_steps, dy / num_steps
+
+                prev_point = start_node
+                for step in range(1, num_steps + 1):
+                    new_point = (int(start_node[0] + step * step_x), int(start_node[1] + step * step_y))
+                    pygame.draw.line(surface, GRAY, prev_point, new_point, 7)
+                    if (prev_point, new_point) not in existing_edges:
+                        edges.append((prev_point, new_point))
+                        existing_edges.add((prev_point, new_point))
+                        existing_edges.add((new_point, prev_point))
+
+                    if new_point not in all_nodes:
+                        nodes.append(new_point)
+                        all_nodes.add(new_point)
+                        node_index_map[new_point] = len(nodes) - 1
+                        connected_nodes[new_point] = set()
+
+                    connected_nodes[prev_point].add(new_point)
+                    connected_nodes[new_point].add(prev_point)
+                    prev_point = new_point
+
+                connected_nodes[best_path[0]].add(best_path[1])
+                connected_nodes[best_path[1]].add(best_path[0])
+
+    return nodes, edges
 #---------------------------------------------------- Functions: Creating L-System City  -----------------------------------------------------------
 
 # Define the function to draw the l-system
@@ -556,11 +662,14 @@ def main():
     nodes, edges = draw_lsystem(sequence, step_size=21, surface=surface)
 
     # Connect the dead-end nodes
-    connect_dead_end_nodes(nodes, edges, surface)
+    if angle == 60 or angle == 120:
+        connect_dead_end_nodes_angle(nodes, edges, surface)
+    else: connect_dead_end_nodes(nodes, edges, surface)
+
 
     # Add white markers at the nodes' coordinates
     for node in nodes:
-        pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 1.5, 1.5))
+        pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 1.8, 1.8))
 
     # Draw buildings or houses
     draw_buildings(surface, nodes, edges)
@@ -618,7 +727,7 @@ def main():
                     nodes, edges = draw_lsystem(sequence, step_size=21, surface=surface)
                     connect_dead_end_nodes(nodes, edges, surface)
                     for node in nodes:
-                        pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 1.5, 1.5))
+                        pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 1.8, 1.8))
                     draw_buildings(surface, nodes, edges)
                     continue
 
