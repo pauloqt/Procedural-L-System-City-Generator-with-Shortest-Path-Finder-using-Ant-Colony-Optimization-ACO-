@@ -215,7 +215,7 @@ def connect_dead_end_nodes_angle(nodes, edges, surface):
         if all(len(connected) > 1 for connected in connected_nodes.values()):
             break
 
-    print(f"Dead-end node connection completed in {iterations} iterations.")
+    #print(f"Dead-end node connection completed in {iterations} iterations.")
 
 
 def connect_dead_end_nodes(nodes, edges, surface):
@@ -734,7 +734,11 @@ def main():
                     end_node = None
                     current_color = None
                     nodes, edges = draw_lsystem(sequence, step_size=21, surface=surface)
-                    connect_dead_end_nodes(nodes, edges, surface)
+                    # Connect the dead-end nodes
+                    if angle == 60 or angle == 120:
+                        connect_dead_end_nodes_angle(nodes, edges, surface)
+                    else:
+                        connect_dead_end_nodes(nodes, edges, surface)
                     for node in nodes:
                         pygame.draw.rect(surface, WHITE, (node[0] - 1, node[1] - 1, 1.8, 1.8))
                     draw_buildings(surface, nodes, edges)
